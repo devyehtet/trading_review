@@ -92,10 +92,33 @@ export default function AdminPage() {
     return () => clearInterval(id);
   }, []);
 
+  /* Merge real user KYC submissions into the apps list */
+  useEffect(() => {
+    if (kycLive.length === 0) return;
+    setApps(prev => {
+      const existingIds = new Set(prev.map(a => a.id));
+      const newEntries: KycApp[] = kycLive
+        .filter(k => !existingIds.has(k.id))
+        .map(k => ({
+          id:          k.id,
+          name:        k.name || k.email,
+          email:       k.email,
+          nationality: k.nationality,
+          idType:      'ID Document',
+          submitted:   k.submittedAt,
+          status:      (k.status === 'Approved' ? 'Approved' : k.status === 'Rejected' ? 'Rejected' : 'Pending') as KycApp['status'],
+          risk:        'Low'  as const,
+          pep:         false,
+          income:      '—',
+        }));
+      if (newEntries.length === 0) return prev;
+      return [...newEntries, ...prev];
+    });
+  }, [kycLive]);
+
   /* Derived live stats */
-  const totalDepositUSD   = deposits.filter(d => d.type === 'Deposit').reduce((s, d) => s + d.amountNum, 0);
-  const pendingDeposits   = deposits.filter(d => d.status === 'Pending').length;
-  const liveKycPending    = kycLive.filter(k => k.status === 'Pending').length;
+  const totalDepositUSD = deposits.filter(d => d.type === 'Deposit').reduce((s, d) => s + d.amountNum, 0);
+  const pendingDeposits = deposits.filter(d => d.status === 'Pending').length;
 
   function notify(msg: string) {
     setToast(msg);
@@ -150,7 +173,7 @@ export default function AdminPage() {
         <nav className="ap-nav">
           {([
             { id: 'overview',  icon: '📊', label: 'Overview'    },
-            { id: 'kyc',       icon: '🪪', label: 'KYC Queue', badge: pending + underReview + liveKycPending },
+            { id: 'kyc',       icon: '🪪', label: 'KYC Queue', badge: pending + underReview },
             { id: 'investors', icon: '👥', label: 'Investors'   },
             { id: 'activity',  icon: '⚡', label: 'Activity',  badge: pendingDeposits > 0 ? pendingDeposits : undefined },
           ] as { id: AdminTab; icon: string; label: string; badge?: number }[]).map(item => (
