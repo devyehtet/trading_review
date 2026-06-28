@@ -78,7 +78,8 @@ export async function POST(req: NextRequest) {
 
     if (mailErr) {
       console.error('Resend error:', mailErr);
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+      // Email failed (e.g. unverified domain) — return code as fallback for demo
+      return NextResponse.json({ success: true, fallbackCode: code, emailFailed: true });
     }
 
     return NextResponse.json({ success: true });

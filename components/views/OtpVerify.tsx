@@ -14,12 +14,13 @@ const OTP_LENGTH = 6;
 const RESEND_SEC = 60;
 
 export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) {
-  const [digits,     setDigits]     = useState<string[]>(Array(OTP_LENGTH).fill(''));
-  const [error,      setError]      = useState('');
-  const [timer,      setTimer]      = useState(RESEND_SEC);
-  const [sending,    setSending]    = useState(false);
-  const [verifying,  setVerifying]  = useState(false);
-  const [sent,       setSent]       = useState(false);
+  const [digits,       setDigits]       = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [error,        setError]        = useState('');
+  const [timer,        setTimer]        = useState(RESEND_SEC);
+  const [sending,      setSending]      = useState(false);
+  const [verifying,    setVerifying]    = useState(false);
+  const [sent,         setSent]         = useState(false);
+  const [fallbackCode, setFallbackCode] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   /* Send OTP on mount */
@@ -40,16 +41,22 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
     setSent(false);
     setError('');
     try {
-      const res = await fetch('/api/send-otp', {
+      const res  = await fetch('/api/send-otp', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email: user.email, name: user.name }),
       });
-      if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        setError(data.error ?? 'Failed to send OTP');
-      } else {
+      const data = await res.json() as { success?: boolean; error?: string; fallbackCode?: string; emailFailed?: boolean };
+      if (res.ok && data.success) {
         setSent(true);
+        if (data.emailFailed && data.fallbackCode) {
+          // Email couldn't be delivered — show code on screen (demo fallback)
+          setFallbackCode(data.fallbackCode);
+        } else {
+          setFallbackCode('');
+        }
+      } else {
+        setError(data.error ?? 'Failed to send OTP');
       }
     } catch {
       setError('Network error — could not send OTP');
@@ -162,6 +169,21 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
       </div>
 
       {error && <p className="kyc-error">{error}</p>}
+
+      {/* Fallback: show code if email delivery failed */}
+      {fallbackCode && (
+        <div style={{
+          background: 'rgba(246,201,69,0.1)', border: '1px solid rgba(246,201,69,0.4)',
+          borderRadius: 10, padding: '10px 14px', margin: '8px 0', textAlign: 'center',
+        }}>
+          <p style={{ fontSize: 11, color: '#ffd97a', margin: '0 0 4px' }}>
+            ⚠️ Email could not be delivered. Use this code:
+          </p>
+          <span style={{ fontSize: 26, fontWeight: 900, letterSpacing: 8, color: '#fbbf24', fontFamily: 'monospace' }}>
+            {fallbackCode}
+          </span>
+        </div>
+      )}
 
       {/* Resend */}
       <p className="otp-resend">
