@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ChangeEvent } from 'react';
+import { useState, useRef, type ChangeEvent } from 'react';
 import type { UserCtx } from '../../lib/types';
 
 interface KycFlowProps {
@@ -277,6 +277,10 @@ function RadioGroup({ name, value, onChange, options }: {
    Step 1 — Identity Verification
 ───────────────────────────────────────────────── */
 function Step1({ data, errors, set, user }: SProps & { user: UserCtx }) {
+  const [idPreview,  setIdPreview]  = useState('');
+  const [idFileName, setIdFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <>
       {/* Pre-filled info */}
@@ -317,20 +321,62 @@ function Step1({ data, errors, set, user }: SProps & { user: UserCtx }) {
       </div>
 
       <Field label="Upload ID Document" error={errors.idUploaded}>
+        {/* Hidden real file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/heic,application/pdf"
+          style={{ display: 'none' }}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setIdFileName(file.name);
+            set('idUploaded', true);
+            if (file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = ev => setIdPreview(ev.target?.result as string);
+              reader.readAsDataURL(file);
+            } else {
+              setIdPreview(''); // PDF — no image preview
+            }
+          }}
+        />
+
+        {/* Upload tap area */}
         <div
           className={`upload-area${data.idUploaded ? ' uploaded' : ''}${errors.idUploaded ? ' invalid' : ''}`}
-          onClick={() => set('idUploaded', true)}
+          onClick={() => fileInputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && set('idUploaded', true)}
+          onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
         >
-          {data.idUploaded
-            ? <><span className="upload-check">✓</span>&nbsp; Document uploaded</>
-            : <><span className="upload-icon">📷</span>&nbsp; Tap to upload (photo / scan)</>
-          }
+          {idPreview ? (
+            /* Image preview */
+            <img
+              src={idPreview}
+              alt="ID preview"
+              style={{ width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 8 }}
+            />
+          ) : data.idUploaded ? (
+            /* PDF or non-image uploaded */
+            <><span className="upload-check">✓</span>&nbsp; {idFileName}</>
+          ) : (
+            <><span className="upload-icon">📷</span>&nbsp; Tap to upload (photo / scan)</>
+          )}
         </div>
+
+        {data.idUploaded && (
+          <button
+            type="button"
+            style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', marginTop: 4 }}
+            onClick={() => { set('idUploaded', false); setIdPreview(''); setIdFileName(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+          >
+            ✕ Remove & re-upload
+          </button>
+        )}
+
         <p className="kyc-note" style={{ marginTop: 6 }}>
-          📌 Document must be valid, unedited, and clearly readable. All 4 corners visible.
+          📌 Accepted: JPG, PNG, HEIC, PDF · Max 10MB · All 4 corners must be visible.
         </p>
       </Field>
     </>
