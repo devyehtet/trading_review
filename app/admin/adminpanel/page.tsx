@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import LogoIcon from '../../../components/ui/LogoIcon';
 import { adminRequests, investors } from '../../../lib/appData';
 import type { AdminRequest, Investor } from '../../../lib/types';
+import {
+  getDeposits, getKycEvents, getActivities,
+  type StoreDeposit, type StoreKyc, type StoreActivity,
+} from '../../../lib/store';
 
 /* ─────────────────────────────────────────────────
    KYC Application data
@@ -35,7 +39,7 @@ const INIT_APPS: KycApp[] = [
   { id: 'KYC-010', name: 'Ei Phyu Win',    email: 'eiphyu@email.com',    nationality: 'Myanmar',   idType: 'Passport',     submitted: 'Jun 21, 11:05', status: 'Approved',     risk: 'Medium', pep: false, income: '$50k–$100k'  },
 ];
 
-type AdminTab  = 'overview' | 'kyc' | 'investors';
+type AdminTab  = 'overview' | 'kyc' | 'investors' | 'activity';
 type KycFilter = 'All' | KycApp['status'];
 
 const STATUS_COLOR: Record<string, string> = {
@@ -64,7 +68,32 @@ export default function AdminPage() {
   const [apps,   setApps]   = useState<KycApp[]>(INIT_APPS);
   const [filter, setFilter] = useState<KycFilter>('All');
   const [detail, setDetail] = useState<KycApp | null>(null);
-  const [toast,  setToast]  = useState('');
+  const [toast,     setToast]     = useState('');
+  const [deposits,  setDeposits]  = useState<StoreDeposit[]>([]);
+  const [kycLive,   setKycLive]   = useState<StoreKyc[]>([]);
+  const [activities,setActivities]= useState<StoreActivity[]>([]);
+
+  /* Live-refresh every 5 s */
+  useEffect(() => {
+    async function refresh() {
+      const [deps, kycs, acts] = await Promise.all([
+        getDeposits(),
+        getKycEvents(),
+        getActivities(),
+      ]);
+      setDeposits(deps);
+      setKycLive(kycs);
+      setActivities(acts);
+    }
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* Derived live stats */
+  const totalDepositUSD   = deposits.filter(d => d.type === 'Deposit').reduce((s, d) => s + d.amountNum, 0);
+  const pendingDeposits   = deposits.filter(d => d.status === 'Pending').length;
+  const liveKycPending    = kycLive.filter(k => k.status === 'Pending').length;
 
   function notify(msg: string) {
     setToast(msg);
@@ -119,8 +148,9 @@ export default function AdminPage() {
         <nav className="ap-nav">
           {([
             { id: 'overview',  icon: '📊', label: 'Overview'    },
-            { id: 'kyc',       icon: '🪪', label: 'KYC Queue', badge: pending + underReview },
+            { id: 'kyc',       icon: '🪪', label: 'KYC Queue', badge: pending + underReview + liveKycPending },
             { id: 'investors', icon: '👥', label: 'Investors'   },
+            { id: 'activity',  icon: '⚡', label: 'Activity',  badge: pendingDeposits > 0 ? pendingDeposits : undefined },
           ] as { id: AdminTab; icon: string; label: string; badge?: number }[]).map(item => (
             <button
               key={item.id}
@@ -153,6 +183,7 @@ export default function AdminPage() {
               {tab === 'overview'  && 'Overview'}
               {tab === 'kyc'       && 'KYC Queue'}
               {tab === 'investors' && 'Investor Records'}
+              {tab === 'activity'  && 'Activity Feed'}
             </h1>
             <p className="ap-page-sub">NexoraCapi Admin Panel · {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </div>
@@ -380,6 +411,120 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          </>
+        )}
+
+        {/* ── ACTIVITY FEED ─────────────────── */}
+        {tab === 'activity' && (
+          <>
+            {/* Live deposit/withdraw stats */}
+            <div className="ap-stat-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 24 }}>
+              <div className="ap-stat-card">
+                <div className="ap-stat-icon" style={{ color: '#10d9a0' }}>💰</div>
+                <div className="ap-stat-value" style={{ color: '#10d9a0' }}>
+                  ${totalDepositUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </div>
+                <div className="ap-stat-label">Total Deposited (Live)</div>
+              </div>
+              <div className="ap-stat-card">
+                <div className="ap-stat-icon" style={{ color: '#ffd97a' }}>⏳</div>
+                <div className="ap-stat-value" style={{ color: '#ffd97a' }}>{pendingDeposits}</div>
+                <div className="ap-stat-label">Pending Transactions</div>
+              </div>
+              <div className="ap-stat-card">
+                <div className="ap-stat-icon" style={{ color: '#60a5fa' }}>🪪</div>
+                <div className="ap-stat-value" style={{ color: '#60a5fa' }}>{kycLive.length}</div>
+                <div className="ap-stat-label">KYC from App</div>
+              </div>
+            </div>
+
+            {/* Deposits table */}
+            <div className="ap-section-title">Deposits & Withdrawals</div>
+            {deposits.length === 0 ? (
+              <div className="ap-empty-state">
+                <span>💳</span>
+                <p>No transactions yet — users deposit/withdraw from the app</p>
+              </div>
+            ) : (
+              <div className="ap-table" style={{ marginBottom: 24 }}>
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr' }}>
+                  <span>ID</span><span>User</span><span>Amount</span><span>Method</span><span>Status</span>
+                </div>
+                {deposits.map((d: StoreDeposit) => (
+                  <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{d.id}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{d.userName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.userEmail}</div>
+                    </div>
+                    <span style={{ color: d.type === 'Deposit' ? '#10d9a0' : '#ff6475', fontWeight: 700 }}>
+                      {d.type === 'Deposit' ? '+' : '-'}{d.amount}
+                    </span>
+                    <span style={{ fontSize: 12 }}>{d.method}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: d.status === 'Approved' ? '#10d9a0' : '#ffd97a' }}>
+                      {d.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* KYC from app */}
+            <div className="ap-section-title">KYC Submissions from App</div>
+            {kycLive.length === 0 ? (
+              <div className="ap-empty-state">
+                <span>🪪</span>
+                <p>No KYC submissions yet — users submit KYC from the app after registration</p>
+              </div>
+            ) : (
+              <div className="ap-table" style={{ marginBottom: 24 }}>
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.5fr 1fr 1fr' }}>
+                  <span>ID</span><span>Name / Email</span><span>Submitted</span><span>Status</span>
+                </div>
+                {kycLive.map((k: StoreKyc) => (
+                  <div key={k.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.5fr 1fr 1fr' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{k.id}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{k.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{k.email}</div>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{k.submittedAt}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#ffd97a' }}>⏳ {k.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Activity log */}
+            <div className="ap-section-title">Activity Log <span style={{ color: '#10d9a0', fontSize: 10 }}>● LIVE</span></div>
+            {activities.length === 0 ? (
+              <div className="ap-empty-state">
+                <span>⚡</span>
+                <p>No activity yet — actions in the app will appear here in real-time</p>
+              </div>
+            ) : (
+              <div className="ap-activity-list">
+                {activities.map((a: StoreActivity) => (
+                  <div key={a.id} className="ap-activity-row">
+                    <div className="ap-activity-icon">
+                      {a.type === 'deposit'    && '💰'}
+                      {a.type === 'withdrawal' && '💸'}
+                      {a.type === 'kyc'        && '🪪'}
+                      {a.type === 'login'      && '🔑'}
+                      {a.type === 'invest'     && '📈'}
+                    </div>
+                    <div className="ap-activity-info">
+                      <div className="ap-activity-user">{a.user}</div>
+                      <div className="ap-activity-detail">{a.detail}</div>
+                    </div>
+                    {a.amount && (
+                      <div className="ap-activity-amount">{a.amount}</div>
+                    )}
+                    <div className="ap-activity-time">{a.timestamp}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </main>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import LogoIcon from '../components/ui/LogoIcon';
 import type { View, AppPhase, UserCtx } from '../lib/types';
+import { addLoginActivity, addKycEvent } from '../lib/store';
 
 /* ── Lazy-loaded views ─────────────────────────── */
 function ViewLoader() { return <div className="view-loader">Loading…</div>; }
@@ -54,19 +55,19 @@ export default function HomePage() {
   }
 
   /* ── OTP callbacks ───────────────────────────── */
-  function handleOtpVerified() {
+  async function handleOtpVerified() {
     if (user.mode === 'login') {
-      // Returning verified user → straight to app
+      await addLoginActivity(user.name || user.email);
       notify(`Welcome back, ${user.name || user.email}!`);
       setPhase('app');
     } else {
-      // New registration → KYC required
       setPhase('kyc');
     }
   }
 
   /* ── KYC callbacks ───────────────────────────── */
-  function handleKycCompleted() {
+  async function handleKycCompleted() {
+    await addKycEvent(user.name, user.email, 'Myanmar');
     setPhase('kyc_pending');
   }
 
@@ -122,7 +123,7 @@ export default function HomePage() {
         {view === 'plans'     && <Plans           notify={notify} setView={setView} />}
         {view === 'dashboard' && <Dashboard />}
         {view === 'markets'   && <Markets   />}
-        {view === 'wallet'    && <Wallet          notify={notify} />}
+        {view === 'wallet'    && <Wallet          notify={notify} userName={user.name} userEmail={user.email} />}
         {view === 'admin'     && <Admin           notify={notify} />}
         {view === 'gold'      && <GoldInvestment  notify={notify} />}
       </>
