@@ -143,7 +143,7 @@ export async function addKycEvent(
     status:      'Pending',
   };
 
-  await supabase.from('nc_kyc_events').insert({
+  const { error: kycErr } = await supabase.from('nc_kyc_events').insert({
     id:           entry.id,
     name:         entry.name,
     email:        entry.email,
@@ -151,6 +151,11 @@ export async function addKycEvent(
     submitted_at: entry.submittedAt,
     status:       entry.status,
   });
+
+  if (kycErr) {
+    console.error('addKycEvent insert failed:', kycErr.message, kycErr.code);
+    throw new Error(`KYC save failed: ${kycErr.message}`);
+  }
 
   await addActivity({
     type:   'kyc',
