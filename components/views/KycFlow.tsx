@@ -282,6 +282,7 @@ function Step1({ data, errors, set, user, onDocUrl }: SProps & { user: UserCtx; 
   const [idPreview,   setIdPreview]   = useState('');
   const [idFileName,  setIdFileName]  = useState('');
   const [uploading,   setUploading]   = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -344,15 +345,22 @@ function Step1({ data, errors, set, user, onDocUrl }: SProps & { user: UserCtx; 
             }
             // Upload to Supabase Storage
             setUploading(true);
+            setUploadError('');
             const path = `${user.email}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
             const { data: upData, error: upErr } = await supabase.storage
               .from('kyc-documents')
               .upload(path, file, { upsert: true });
             setUploading(false);
-            if (!upErr && upData) {
-              const { data: urlData } = supabase.storage.from('kyc-documents').getPublicUrl(upData.path);
-              onDocUrl(urlData.publicUrl);
+            if (upErr || !upData) {
+              console.error('Upload error:', upErr);
+              setUploadError(`Upload failed: ${upErr?.message ?? 'Unknown error'}`);
+              set('idUploaded', false);
+              setIdPreview('');
+              setIdFileName('');
+              return;
             }
+            const { data: urlData } = supabase.storage.from('kyc-documents').getPublicUrl(upData.path);
+            onDocUrl(urlData.publicUrl);
             set('idUploaded', true);
           }}
         />
@@ -387,6 +395,9 @@ function Step1({ data, errors, set, user, onDocUrl }: SProps & { user: UserCtx; 
           </button>
         )}
 
+        {uploadError && (
+          <p className="kyc-field-error" style={{ marginTop: 4 }}>{uploadError}</p>
+        )}
         <p className="kyc-note" style={{ marginTop: 6 }}>
           📌 Accepted: JPG, PNG, HEIC, PDF · Max 10MB · All 4 corners must be visible.
         </p>
