@@ -5,30 +5,57 @@ import LogoIcon from '../ui/LogoIcon';
 import type { UserCtx } from '../../lib/types';
 
 interface OtpVerifyProps {
-  user: UserCtx;
+  user:       UserCtx;
   onVerified: () => void;
   onBack:     () => void;
 }
 
 const OTP_LENGTH = 6;
-const DEMO_OTP   = '123456';
 const RESEND_SEC = 60;
 
 export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) {
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
-  const [error,  setError]  = useState('');
-  const [timer,  setTimer]  = useState(RESEND_SEC);
+  const [digits,     setDigits]     = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [error,      setError]      = useState('');
+  const [timer,      setTimer]      = useState(RESEND_SEC);
+  const [sending,    setSending]    = useState(false);
+  const [verifying,  setVerifying]  = useState(false);
+  const [sent,       setSent]       = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  /* Countdown timer */
+  /* Send OTP on mount */
+  useEffect(() => {
+    sendOtp();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Countdown */
   useEffect(() => {
     if (timer <= 0) return;
     const id = setTimeout(() => setTimer((t) => t - 1), 1000);
     return () => clearTimeout(id);
   }, [timer]);
 
-  function focusNext(index: number) {
-    inputRefs.current[index + 1]?.focus();
+  async function sendOtp() {
+    setSending(true);
+    setSent(false);
+    setError('');
+    try {
+      const res = await fetch('/api/send-otp', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: user.email, name: user.name }),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        setError(data.error ?? 'Failed to send OTP');
+      } else {
+        setSent(true);
+      }
+    } catch {
+      setError('Network error — could not send OTP');
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleChange(index: number, val: string) {
@@ -37,7 +64,7 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
     next[index] = val.slice(-1);
     setDigits(next);
     setError('');
-    if (val && index < OTP_LENGTH - 1) focusNext(index);
+    if (val && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus();
   }
 
   function handleKeyDown(index: number, e: KeyboardEvent<HTMLInputElement>) {
@@ -55,26 +82,43 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
     inputRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus();
   }
 
-  function handleVerify() {
+  async function handleVerify() {
     const code = digits.join('');
-    if (code.length < OTP_LENGTH) {
-      setError('Please enter the 6-digit code.');
-      return;
+    if (code.length < OTP_LENGTH) { setError('Please enter the 6-digit code.'); return; }
+
+    setVerifying(true);
+    setError('');
+    try {
+      const res = await fetch('/api/verify-otp', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: user.email, code }),
+      });
+      if (res.ok) {
+        onVerified();
+      } else {
+        const data = await res.json() as { error?: string };
+        const msg = data.error === 'OTP expired'
+          ? 'Code expired — request a new one.'
+          : data.error === 'Invalid OTP'
+          ? 'Incorrect code. Please try again.'
+          : (data.error ?? 'Verification failed');
+        setError(msg);
+        setDigits(Array(OTP_LENGTH).fill(''));
+        inputRefs.current[0]?.focus();
+      }
+    } catch {
+      setError('Network error — please try again');
+    } finally {
+      setVerifying(false);
     }
-    if (code !== DEMO_OTP) {
-      setError(`Invalid code. (Demo: use ${DEMO_OTP})`);
-      setDigits(Array(OTP_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
-      return;
-    }
-    onVerified();
   }
 
   function handleResend() {
     setTimer(RESEND_SEC);
-    setError('');
     setDigits(Array(OTP_LENGTH).fill(''));
     inputRefs.current[0]?.focus();
+    sendOtp();
   }
 
   const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
@@ -88,8 +132,12 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
         </div>
         <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 900 }}>Verify Your Email</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
-          We sent a 6-digit code to<br />
-          <strong style={{ color: 'var(--text-muted)' }}>{maskedEmail}</strong>
+          {sending
+            ? 'Sending verification code…'
+            : sent
+            ? <>Code sent to <strong style={{ color: 'var(--text-muted)' }}>{maskedEmail}</strong></>
+            : <>Enter the code sent to <strong style={{ color: 'var(--text-muted)' }}>{maskedEmail}</strong></>
+          }
         </p>
       </div>
 
@@ -108,6 +156,7 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
             onPaste={i === 0 ? handlePaste : undefined}
             className={`otp-cell${d ? ' filled' : ''}${error ? ' error' : ''}`}
             aria-label={`Digit ${i + 1}`}
+            disabled={sending || verifying}
           />
         ))}
       </div>
@@ -118,21 +167,26 @@ export default function OtpVerify({ user, onVerified, onBack }: OtpVerifyProps) 
       <p className="otp-resend">
         {timer > 0
           ? <>Resend code in <strong>{timer}s</strong></>
-          : <button type="button" className="link-btn" onClick={handleResend}>Resend Code</button>
+          : <button type="button" className="link-btn" onClick={handleResend} disabled={sending}>
+              {sending ? 'Sending…' : 'Resend Code'}
+            </button>
         }
       </p>
 
       {/* Actions */}
       <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
-        <button type="button" className="btn-next" onClick={handleVerify}>
-          Verify →
+        <button
+          type="button"
+          className="btn-next"
+          onClick={handleVerify}
+          disabled={verifying || sending || digits.join('').length < OTP_LENGTH}
+        >
+          {verifying ? 'Verifying…' : 'Verify →'}
         </button>
         <button type="button" className="btn-back" onClick={onBack}>
           ← Back
         </button>
       </div>
-
-      <p className="otp-hint">Demo code: <strong style={{ color: 'var(--color-accent)' }}>123456</strong></p>
     </div>
   );
 }
