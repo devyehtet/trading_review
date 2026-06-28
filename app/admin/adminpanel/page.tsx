@@ -26,6 +26,7 @@ interface KycApp {
   risk:        'Low' | 'Medium' | 'High';
   pep:         boolean;
   income:      string;
+  docUrl?:     string;
 }
 
 const INIT_APPS: KycApp[] = [
@@ -110,6 +111,7 @@ export default function AdminPage() {
           risk:        'Low'  as const,
           pep:         false,
           income:      '—',
+          docUrl:      k.docUrl,
         }));
       if (newEntries.length === 0) return prev;
       return [...newEntries, ...prev];
@@ -386,8 +388,11 @@ export default function AdminPage() {
                   {/* Document */}
                   <div className="ap-doc-row">
                     <span>🪪</span>
-                    <span>ID Document — Uploaded</span>
-                    <button type="button" className="ap-link-btn">View</button>
+                    <span>ID Document — {detail.docUrl ? 'Uploaded' : 'Not provided'}</span>
+                    {detail.docUrl
+                      ? <a href={detail.docUrl} target="_blank" rel="noopener noreferrer" className="ap-link-btn">View</a>
+                      : <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>—</span>
+                    }
                   </div>
 
                   {detail.pep && (
