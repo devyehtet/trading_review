@@ -2,10 +2,11 @@
 
 import { useState, useRef, type ChangeEvent } from 'react';
 import type { UserCtx } from '../../lib/types';
+import { supabase } from '../../lib/supabase';
 
 interface KycFlowProps {
   user:        UserCtx;
-  onCompleted: () => void;
+  onCompleted: (docUrl?: string) => void;
   onBack:      () => void;
 }
 
@@ -99,6 +100,7 @@ export default function KycFlow({ user, onCompleted, onBack }: KycFlowProps) {
   const [step,   setStep]   = useState<StepId>(1);
   const [data,   setData]   = useState<KycData>({ ...INIT });
   const [errors, setErrors] = useState<Partial<Record<keyof KycData, string>>>({});
+  const [docUrl, setDocUrl] = useState<string>('');
 
   function set<K extends keyof KycData>(key: K, val: KycData[K]) {
     setData(d => ({ ...d, [key]: val }));
@@ -153,7 +155,7 @@ export default function KycFlow({ user, onCompleted, onBack }: KycFlowProps) {
   function next() {
     if (!validate()) return;
     if (step < 3) setStep(s => (s + 1) as StepId);
-    else          onCompleted();
+    else          onCompleted(docUrl || undefined);
   }
 
   function back() {
@@ -193,7 +195,7 @@ export default function KycFlow({ user, onCompleted, onBack }: KycFlowProps) {
 
       {/* Step body */}
       <div className="kyc-body">
-        {step === 1 && <Step1 data={data} errors={errors} set={set} user={user} />}
+        {step === 1 && <Step1 data={data} errors={errors} set={set} user={user} onDocUrl={setDocUrl} />}
         {step === 2 && <Step2 data={data} errors={errors} set={set} toggleFund={toggleFund} />}
         {step === 3 && <Step3 data={data} errors={errors} set={set} user={user} />}
       </div>
@@ -276,9 +278,10 @@ function RadioGroup({ name, value, onChange, options }: {
 /* ─────────────────────────────────────────────────
    Step 1 — Identity Verification
 ───────────────────────────────────────────────── */
-function Step1({ data, errors, set, user }: SProps & { user: UserCtx }) {
-  const [idPreview,  setIdPreview]  = useState('');
-  const [idFileName, setIdFileName] = useState('');
+function Step1({ data, errors, set, user, onDocUrl }: SProps & { user: UserCtx; onDocUrl: (url: string) => void }) {
+  const [idPreview,   setIdPreview]   = useState('');
+  const [idFileName,  setIdFileName]  = useState('');
+  const [uploading,   setUploading]   = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -327,18 +330,30 @@ function Step1({ data, errors, set, user }: SProps & { user: UserCtx }) {
           type="file"
           accept="image/jpeg,image/png,image/heic,application/pdf"
           style={{ display: 'none' }}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          onChange={async (e: ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
             if (!file) return;
             setIdFileName(file.name);
-            set('idUploaded', true);
+            // Show local preview immediately
             if (file.type.startsWith('image/')) {
               const reader = new FileReader();
               reader.onload = ev => setIdPreview(ev.target?.result as string);
               reader.readAsDataURL(file);
             } else {
-              setIdPreview(''); // PDF — no image preview
+              setIdPreview('');
             }
+            // Upload to Supabase Storage
+            setUploading(true);
+            const path = `${user.email}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            const { data: upData, error: upErr } = await supabase.storage
+              .from('kyc-documents')
+              .upload(path, file, { upsert: true });
+            setUploading(false);
+            if (!upErr && upData) {
+              const { data: urlData } = supabase.storage.from('kyc-documents').getPublicUrl(upData.path);
+              onDocUrl(urlData.publicUrl);
+            }
+            set('idUploaded', true);
           }}
         />
 
@@ -350,15 +365,12 @@ function Step1({ data, errors, set, user }: SProps & { user: UserCtx }) {
           tabIndex={0}
           onKeyDown={e => e.key === 'Enter' && fileInputRef.current?.click()}
         >
-          {idPreview ? (
-            /* Image preview */
-            <img
-              src={idPreview}
-              alt="ID preview"
-              style={{ width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 8 }}
-            />
+          {uploading ? (
+            <><span className="upload-icon">⏳</span>&nbsp; Uploading…</>
+          ) : idPreview ? (
+            <img src={idPreview} alt="ID preview"
+              style={{ width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 8 }} />
           ) : data.idUploaded ? (
-            /* PDF or non-image uploaded */
             <><span className="upload-check">✓</span>&nbsp; {idFileName}</>
           ) : (
             <><span className="upload-icon">📷</span>&nbsp; Tap to upload (photo / scan)</>

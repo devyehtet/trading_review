@@ -26,6 +26,7 @@ export interface StoreKyc {
   nationality: string;
   submittedAt: string;
   status:      'Pending' | 'Approved' | 'Rejected';
+  docUrl?:     string;
 }
 
 export interface StoreActivity {
@@ -126,6 +127,7 @@ export async function getKycEvents(): Promise<StoreKyc[]> {
     nationality: r.nationality,
     submittedAt: r.submitted_at,
     status:      r.status,
+    docUrl:      r.doc_url ?? undefined,
   }));
 }
 
@@ -133,6 +135,7 @@ export async function addKycEvent(
   name: string,
   email: string,
   nationality: string,
+  docUrl?: string,
 ): Promise<StoreKyc> {
   const entry: StoreKyc = {
     id:          `KYC-APP-${uid().toUpperCase()}`,
@@ -150,6 +153,7 @@ export async function addKycEvent(
     nationality:  entry.nationality,
     submitted_at: entry.submittedAt,
     status:       entry.status,
+    doc_url:      docUrl ?? null,
   });
 
   if (kycErr) {

@@ -66,9 +66,9 @@ export default function HomePage() {
   }
 
   /* ── KYC callbacks ───────────────────────────── */
-  async function handleKycCompleted() {
+  async function handleKycCompleted(docUrl?: string) {
     try {
-      await addKycEvent(user.name, user.email, 'Myanmar');
+      await addKycEvent(user.name, user.email, 'Myanmar', docUrl);
       setPhase('kyc_pending');
     } catch (e) {
       notify(`⚠️ ${e instanceof Error ? e.message : 'Submission failed — check connection'}`);
