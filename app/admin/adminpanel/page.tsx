@@ -8,7 +8,7 @@ import LogoIcon from '../../../components/ui/LogoIcon';
 import { adminRequests, investors } from '../../../lib/appData';
 import type { AdminRequest, Investor } from '../../../lib/types';
 import {
-  getDeposits, getKycEvents, getActivities,
+  getDeposits, getKycEvents, getActivities, updateKycStatus,
   type StoreDeposit, type StoreKyc, type StoreActivity,
 } from '../../../lib/store';
 
@@ -125,18 +125,30 @@ export default function AdminPage() {
     setTimeout(() => setToast(''), 2500);
   }
 
-  function approve(id: string) {
-    const name = apps.find(a => a.id === id)?.name;
+  async function approve(id: string) {
+    const app = apps.find(a => a.id === id);
     setApps(p => p.map(a => a.id === id ? { ...a, status: 'Approved' } : a));
     setDetail(null);
-    notify(`✓ Approved — ${name}`);
+    notify(`✓ Approved — ${app?.name}`);
+    // Update Supabase + send email for real user entries
+    if (id.startsWith('KYC-APP-')) {
+      await updateKycStatus(id, 'Approved');
+      if (app?.email) {
+        fetch('/api/kyc-approved', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: app.email, name: app.name }),
+        }).catch(console.error);
+      }
+    }
   }
 
-  function reject(id: string) {
+  async function reject(id: string) {
     const name = apps.find(a => a.id === id)?.name;
     setApps(p => p.map(a => a.id === id ? { ...a, status: 'Rejected' } : a));
     setDetail(null);
     notify(`✕ Rejected — ${name}`);
+    if (id.startsWith('KYC-APP-')) await updateKycStatus(id, 'Rejected');
   }
 
   function markReview(id: string) {
