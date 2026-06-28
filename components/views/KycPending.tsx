@@ -1,25 +1,80 @@
 'use client';
 
-import LogoIcon from '../ui/LogoIcon';
+import { useEffect, useState } from 'react';
+import { getKycStatusByEmail } from '../../lib/store';
 
 interface KycPendingProps {
-  name:      string;
-  onApprove: () => void; // demo-only: simulates compliance approval
+  name:       string;
+  email:      string;
+  onApprove:  () => void;
+  onRejected: () => void;
 }
 
 const REVIEW_STEPS = [
-  { label: 'Application Received',         done: true  },
-  { label: 'Document Verification',        done: true  },
-  { label: 'Identity Check (AML / KYC)',   done: false },
-  { label: 'Risk Assessment Review',       done: false },
-  { label: 'Compliance Approval',          done: false },
-  { label: 'Account Activation',           done: false },
+  { label: 'Application Received',       done: true  },
+  { label: 'Document Verification',      done: true  },
+  { label: 'Identity Check (AML / KYC)', done: false },
+  { label: 'Risk Assessment Review',     done: false },
+  { label: 'Compliance Approval',        done: false },
+  { label: 'Account Activation',         done: false },
 ];
 
-export default function KycPending({ name, onApprove }: KycPendingProps) {
+export default function KycPending({ name, email, onApprove, onRejected }: KycPendingProps) {
+  const [status, setStatus] = useState<'Pending' | 'Approved' | 'Rejected'>('Pending');
+
+  /* Poll Supabase every 5 s for real approval */
+  useEffect(() => {
+    if (!email) return;
+
+    async function check() {
+      const s = await getKycStatusByEmail(email);
+      if (s === 'Approved') {
+        setStatus('Approved');
+        setTimeout(onApprove, 1500);  // brief delay so user sees the approved state
+      } else if (s === 'Rejected') {
+        setStatus('Rejected');
+        setTimeout(onRejected, 1500);
+      }
+    }
+
+    check();
+    const id = setInterval(check, 5000);
+    return () => clearInterval(id);
+  }, [email, onApprove, onRejected]);
+
+  /* Approved state */
+  if (status === 'Approved') {
+    return (
+      <div className="pending-screen" style={{ textAlign: 'center' }}>
+        <div className="pending-icon-wrap">
+          <div className="pending-icon">✅</div>
+        </div>
+        <h3 className="pending-title" style={{ color: 'var(--color-accent)' }}>Account Approved!</h3>
+        <p className="pending-sub">
+          Welcome, <strong>{name || 'Applicant'}</strong>! Your KYC has been verified. Entering your dashboard…
+        </p>
+      </div>
+    );
+  }
+
+  /* Rejected state */
+  if (status === 'Rejected') {
+    return (
+      <div className="pending-screen" style={{ textAlign: 'center' }}>
+        <div className="pending-icon-wrap">
+          <div className="pending-icon">❌</div>
+        </div>
+        <h3 className="pending-title" style={{ color: '#ff6475' }}>Application Rejected</h3>
+        <p className="pending-sub">
+          Unfortunately your KYC application was not approved. Please contact support for assistance.
+        </p>
+      </div>
+    );
+  }
+
+  /* Pending state (default) */
   return (
     <div className="pending-screen">
-      {/* Icon */}
       <div className="pending-icon-wrap">
         <div className="pending-icon">⏳</div>
       </div>
@@ -56,9 +111,8 @@ export default function KycPending({ name, onApprove }: KycPendingProps) {
         </div>
       </div>
 
-      {/* Info */}
       <p className="pending-info">
-        We will notify you by email once your account is verified. You can check your status by logging in again.
+        We will notify you by email once your account is verified. This page checks automatically every 5 seconds.
       </p>
 
       {/* DEMO shortcut */}

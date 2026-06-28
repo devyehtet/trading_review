@@ -208,3 +208,30 @@ export async function addActivity(
 export async function addLoginActivity(user: string): Promise<void> {
   await addActivity({ type: 'login', user, detail: 'User signed in' });
 }
+
+/* ── KYC status update (admin) ───────────────── */
+export async function updateKycStatus(
+  id: string,
+  status: 'Approved' | 'Rejected' | 'Pending',
+): Promise<void> {
+  const { error } = await supabase
+    .from('nc_kyc_events')
+    .update({ status })
+    .eq('id', id);
+  if (error) console.error('updateKycStatus:', error.message);
+}
+
+/* ── Poll KYC status by email (user side) ────── */
+export async function getKycStatusByEmail(
+  email: string,
+): Promise<'Pending' | 'Approved' | 'Rejected' | null> {
+  const { data, error } = await supabase
+    .from('nc_kyc_events')
+    .select('status')
+    .eq('email', email)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.status as 'Pending' | 'Approved' | 'Rejected';
+}

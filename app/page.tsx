@@ -115,7 +115,12 @@ export default function HomePage() {
       return (
         <KycPending
           name={user.name}
+          email={user.email}
           onApprove={handleKycApproved}
+          onRejected={() => {
+            setPhase('auth');
+            setUser({ name: '', email: '', phone: '', mode: 'login' });
+          }}
         />
       );
     }
