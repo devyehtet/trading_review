@@ -71,10 +71,11 @@ export default function AdminPage() {
   const [apps,   setApps]   = useState<KycApp[]>(INIT_APPS);
   const [filter, setFilter] = useState<KycFilter>('All');
   const [detail, setDetail] = useState<KycApp | null>(null);
-  const [toast,     setToast]     = useState('');
-  const [deposits,  setDeposits]  = useState<StoreDeposit[]>([]);
-  const [kycLive,   setKycLive]   = useState<StoreKyc[]>([]);
-  const [activities,setActivities]= useState<StoreActivity[]>([]);
+  const [toast,        setToast]        = useState('');
+  const [deposits,     setDeposits]     = useState<StoreDeposit[]>([]);
+  const [kycLive,      setKycLive]      = useState<StoreKyc[]>([]);
+  const [activities,   setActivities]   = useState<StoreActivity[]>([]);
+  const [docPreviewUrl,setDocPreviewUrl]= useState<string | null>(null);
 
   /* Live-refresh every 5 s */
   useEffect(() => {
@@ -390,7 +391,7 @@ export default function AdminPage() {
                     <span>🪪</span>
                     <span>ID Document — {detail.docUrl ? 'Uploaded' : 'Not provided'}</span>
                     {detail.docUrl
-                      ? <a href={detail.docUrl} target="_blank" rel="noopener noreferrer" className="ap-link-btn">View</a>
+                      ? <button type="button" className="ap-link-btn" onClick={() => setDocPreviewUrl(detail.docUrl!)}>View</button>
                       : <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>—</span>
                     }
                   </div>
@@ -573,6 +574,58 @@ export default function AdminPage() {
 
       {/* Toast */}
       {toast && <div className="ap-toast">{toast}</div>}
+
+      {/* Document Preview Modal */}
+      {docPreviewUrl && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => setDocPreviewUrl(null)}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 16, padding: 20,
+              maxWidth: '80vw', maxHeight: '85vh',
+              display: 'flex', flexDirection: 'column', gap: 12,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>🪪 ID Document</span>
+              <button
+                type="button"
+                onClick={() => setDocPreviewUrl(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-secondary)' }}
+              >✕</button>
+            </div>
+            {docPreviewUrl.match(/\.(pdf)$/i) ? (
+              <iframe
+                src={docPreviewUrl}
+                style={{ width: '70vw', height: '70vh', border: 'none', borderRadius: 8 }}
+                title="ID Document"
+              />
+            ) : (
+              <img
+                src={docPreviewUrl}
+                alt="ID Document"
+                style={{ maxWidth: '70vw', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }}
+              />
+            )}
+            <a
+              href={docPreviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center' }}
+            >
+              ↗ Open in new tab
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
