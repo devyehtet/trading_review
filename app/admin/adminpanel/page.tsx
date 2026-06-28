@@ -147,18 +147,37 @@ export default function AdminPage() {
   }
 
   async function reject(id: string) {
-    const name = apps.find(a => a.id === id)?.name;
+    const app = apps.find(a => a.id === id);
     setApps(p => p.map(a => a.id === id ? { ...a, status: 'Rejected' } : a));
     setDetail(null);
-    notify(`✕ Rejected — ${name}`);
-    if (id.startsWith('KYC-APP-')) await updateKycStatus(id, 'Rejected');
+    notify(`✕ Rejected — ${app?.name}`);
+    if (id.startsWith('KYC-APP-')) {
+      await updateKycStatus(id, 'Rejected');
+      if (app?.email) {
+        fetch('/api/kyc-rejected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: app.email, name: app.name }),
+        }).catch(console.error);
+      }
+    }
   }
 
-  function markReview(id: string) {
-    const name = apps.find(a => a.id === id)?.name;
+  async function markReview(id: string) {
+    const app = apps.find(a => a.id === id);
     setApps(p => p.map(a => a.id === id ? { ...a, status: 'Under Review' } : a));
     setDetail(d => d?.id === id ? { ...d, status: 'Under Review' } : d);
-    notify(`🔍 Under Review — ${name}`);
+    notify(`🔍 Under Review — ${app?.name}`);
+    if (id.startsWith('KYC-APP-')) {
+      await updateKycStatus(id, 'Pending'); // keep DB in sync
+      if (app?.email) {
+        fetch('/api/kyc-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: app.email, name: app.name }),
+        }).catch(console.error);
+      }
+    }
   }
 
   const pending     = apps.filter(a => a.status === 'Pending').length;
