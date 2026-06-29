@@ -602,18 +602,23 @@ body {
 
 .pw-toggle {
   position: absolute;
-  right: 12px;
-  background: none;
-  border: none;
+  right: 10px;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
   cursor: pointer;
-  padding: 4px;
+  padding: 2px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: color 0.15s;
+  width: auto;
+  height: auto;
+  border-radius: 0;
 }
 
+.pw-toggle svg { width: 15px; height: 15px; }
 .pw-toggle:hover { color: var(--text-primary); }
 
 /* ============================================
