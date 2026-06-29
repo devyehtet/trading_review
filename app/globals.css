@@ -3575,6 +3575,180 @@ body {
   pointer-events: none;
 }
 
+/* ── Wallet Modal — multi-step ─────────────────── */
+.wm-large { max-height: 92%; }
+
+.wm-steps {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.wm-step {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.wm-step.active { color: var(--accent); font-weight: 700; }
+.wm-step.done   { color: #10d9a0; }
+
+.wm-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+
+.wm-type-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.wm-type-tab {
+  background: var(--border);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 10px 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wm-type-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(59,130,246,0.08);
+}
+
+.wm-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.wm-method-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-alt);
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.wm-method-card.selected {
+  border-color: var(--accent);
+  background: rgba(59,130,246,0.06);
+}
+.wm-method-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.wm-method-info { flex: 1; }
+.wm-method-info strong { display: block; font-size: 13px; color: var(--text-primary); }
+.wm-method-info small  { font-size: 11px; color: var(--text-secondary); }
+.wm-check {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Address box */
+.wm-address-box {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.wm-address-text {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  background: rgba(0,0,0,0.2);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.wm-copy-btn {
+  width: 100%;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px;
+  cursor: pointer;
+}
+.wm-copy-inline {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+.wm-copy-inline:hover { opacity: 1; }
+
+.wm-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.wm-info-item {
+  background: var(--card-alt);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wm-info-item span  { font-size: 10px; color: var(--text-secondary); }
+.wm-info-item strong { font-size: 13px; }
+
+/* Bank box */
+.wm-bank-box {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 14px;
+  margin-bottom: 12px;
+}
+.wm-bank-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  gap: 8px;
+}
+.wm-bank-row:last-child { border-bottom: none; }
+.wm-bank-row span  { font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+.wm-bank-row strong { font-size: 13px; word-break: break-all; text-align: right; }
+
+.wm-warning {
+  background: rgba(246,201,69,0.08);
+  border: 1px solid rgba(246,201,69,0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #ffd97a;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
 .wallet-summary {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
