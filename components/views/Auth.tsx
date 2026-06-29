@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type MouseEvent } from 'react';
 import LogoIcon from '../ui/LogoIcon';
 import type { UserCtx } from '../../lib/types';
 
@@ -12,7 +12,9 @@ interface AuthProps {
 type AuthMode = 'login' | 'register';
 
 export default function Auth({ onLoginSuccess, onRegisterSuccess }: AuthProps) {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode,    setMode]    = useState<AuthMode>('login');
+  const [showPw,  setShowPw]  = useState(false);
+  const [showCpw, setShowCpw] = useState(false);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,7 +34,6 @@ export default function Auth({ onLoginSuccess, onRegisterSuccess }: AuthProps) {
 
   return (
     <>
-      {/* Brand splash */}
       <div className="auth">
         <div className="biglogo">
           <LogoIcon size={72} />
@@ -52,7 +53,6 @@ export default function Auth({ onLoginSuccess, onRegisterSuccess }: AuthProps) {
         </p>
       </div>
 
-      {/* Mode toggle */}
       <div className="switch">
         <button
           type="button"
@@ -70,7 +70,6 @@ export default function Auth({ onLoginSuccess, onRegisterSuccess }: AuthProps) {
         </button>
       </div>
 
-      {/* Form */}
       <form className="form" onSubmit={handleSubmit}>
         {mode === 'register' && (
           <input name="fullName" placeholder="Full name" required />
@@ -79,9 +78,29 @@ export default function Auth({ onLoginSuccess, onRegisterSuccess }: AuthProps) {
         {mode === 'register' && (
           <input name="phone" placeholder="Phone / Telegram" />
         )}
-        <input name="password" type="password" placeholder="Password" required />
+        <div className="pw-field">
+          <input name="password" type={showPw ? 'text' : 'password'} placeholder="Password" required />
+          <button
+            type="button"
+            className="pw-toggle"
+            onClick={(e: MouseEvent) => { e.preventDefault(); setShowPw(v => !v); }}
+            tabIndex={-1}
+          >
+            {showPw ? '🙈' : '👁️'}
+          </button>
+        </div>
         {mode === 'register' && (
-          <input name="confirmPassword" type="password" placeholder="Confirm password" required />
+          <div className="pw-field">
+            <input name="confirmPassword" type={showCpw ? 'text' : 'password'} placeholder="Confirm password" required />
+            <button
+              type="button"
+              className="pw-toggle"
+              onClick={(e: MouseEvent) => { e.preventDefault(); setShowCpw(v => !v); }}
+              tabIndex={-1}
+            >
+              {showCpw ? '🙈' : '👁️'}
+            </button>
+          </div>
         )}
         <button type="submit">
           {mode === 'login' ? 'Sign In →' : 'Create Account →'}
