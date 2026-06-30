@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import Title from '../ui/Title';
 import {
-  getDepositsByEmail, getTradeResultsByEmail,
-  type StoreDeposit, type StoreTradeResult,
+  getDepositsByEmail, getDailyResults, getMarginRatio,
+  type StoreDeposit, type StoreDailyResult, type InvestPlan,
 } from '../../lib/store';
 
 interface DashboardProps {
@@ -12,20 +12,31 @@ interface DashboardProps {
   userName?:  string;
 }
 
+const PLAN_COLOR: Record<InvestPlan, string> = {
+  M: '#3b82f6',
+  Q: '#8b5cf6',
+  Y: '#10d9a0',
+};
+const PLAN_LABEL: Record<InvestPlan, string> = {
+  M: 'M Plan · 1 Month',
+  Q: 'Q Plan · 6 Months',
+  Y: 'Y Plan · 12 Months',
+};
+
 export default function Dashboard({ userEmail = '', userName = 'User' }: DashboardProps) {
   const [deposits, setDeposits] = useState<StoreDeposit[]>([]);
-  const [trades,   setTrades]   = useState<StoreTradeResult[]>([]);
+  const [daily,    setDaily]    = useState<StoreDailyResult[]>([]);
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     if (!userEmail) { setLoading(false); return; }
     async function load() {
-      const [deps, trs] = await Promise.all([
+      const [deps, drs] = await Promise.all([
         getDepositsByEmail(userEmail),
-        getTradeResultsByEmail(userEmail),
+        getDailyResults(),
       ]);
       setDeposits(deps);
-      setTrades(trs);
+      setDaily(drs);
       setLoading(false);
     }
     load();
@@ -33,25 +44,35 @@ export default function Dashboard({ userEmail = '', userName = 'User' }: Dashboa
     return () => clearInterval(id);
   }, [userEmail]);
 
-  /* ── Computed stats ── */
+  /* ── Compute user's profit from each daily result ── */
   const totalDeposited = deposits.reduce((s, d) => s + d.amountNum, 0);
-  const totalPnl       = trades.reduce((s, t) => s + (t.tradeType === 'win' ? t.amount : -t.amount), 0);
-  const totalBalance   = totalDeposited + totalPnl;
-  const wins           = trades.filter(t => t.tradeType === 'win').length;
-  const losses         = trades.filter(t => t.tradeType === 'loss').length;
-  const winRate        = trades.length ? Math.round((wins / trades.length) * 100) : 0;
-  const pnlColor       = totalPnl >= 0 ? '#10d9a0' : '#ff6475';
 
-  /* ── Chart data from trade history ── */
+  // For each daily result, compute user profit = sum over deposits of (dep × daily% × marginRatio)
+  const dailyBreakdown = daily.map(dr => {
+    let userProfit = 0;
+    for (const dep of deposits) {
+      const ratio  = getMarginRatio(dep.plan, dep.amountNum);
+      const raw    = dep.amountNum * (dr.tradePercent / 100);
+      userProfit  += raw * ratio;
+    }
+    return { ...dr, userProfit };
+  });
+
+  const totalPnl     = dailyBreakdown.reduce((s, d) => s + d.userProfit, 0);
+  const totalBalance = totalDeposited + totalPnl;
+  const wins         = dailyBreakdown.filter(d => d.userProfit > 0).length;
+  const losses       = dailyBreakdown.filter(d => d.userProfit < 0).length;
+  const winRate      = dailyBreakdown.length ? Math.round((wins / dailyBreakdown.length) * 100) : 0;
+  const pnlColor     = totalPnl >= 0 ? '#10d9a0' : '#ff6475';
+  const pnlPct       = totalDeposited > 0 ? ((totalPnl / totalDeposited) * 100).toFixed(2) : '0.00';
+
+  /* ── Chart bars from running balance ── */
   const chartPoints = (() => {
     let running = totalDeposited;
-    const points = [running];
-    const sorted = [...trades].reverse();
-    for (const t of sorted) {
-      running += t.tradeType === 'win' ? t.amount : -t.amount;
-      points.push(Math.max(0, running));
-    }
-    return points;
+    const pts = [running];
+    const sorted = [...dailyBreakdown].reverse();
+    for (const d of sorted) { running += d.userProfit; pts.push(Math.max(0, running)); }
+    return pts;
   })();
   const chartMax  = Math.max(...chartPoints, 1);
   const chartPcts = chartPoints.map(p => Math.round((p / chartMax) * 100));
@@ -67,26 +88,24 @@ export default function Dashboard({ userEmail = '', userName = 'User' }: Dashboa
 
   return (
     <>
-      <Title title="Dashboard" sub={`Portfolio overview · ${userName}`} />
+      <Title title="Dashboard" sub={`Portfolio · ${userName}`} />
 
       {/* Balance hero */}
       <div className="hero" style={{ marginBottom: 16 }}>
         <small className="hero-label">Total Balance</small>
-        <h2 className="hero-value" style={{ color: totalBalance > 0 ? 'var(--text-primary)' : '#ff6475' }}>
+        <h2 className="hero-value">
           ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </h2>
         <div className="hero-meta">
           <span style={{ color: pnlColor }}>
-            {totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })} P&L
+            {totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
           <span className="hero-sep">·</span>
-          <span style={{ color: pnlColor }}>
-            {totalDeposited > 0 ? `${totalPnl >= 0 ? '+' : ''}${((totalPnl / totalDeposited) * 100).toFixed(2)}%` : '—'}
-          </span>
+          <span style={{ color: pnlColor }}>{totalPnl >= 0 ? '+' : ''}{pnlPct}%</span>
         </div>
       </div>
 
-      {/* Stat grid */}
+      {/* Stats */}
       <div className="grid">
         <div className="card-stat">
           <small>Deposited</small>
@@ -103,115 +122,101 @@ export default function Dashboard({ userEmail = '', userName = 'User' }: Dashboa
           <strong style={{ color: winRate >= 50 ? '#10d9a0' : '#ff6475' }}>{winRate}%</strong>
         </div>
         <div className="card-stat">
-          <small>Trades</small>
-          <strong>{trades.length}</strong>
+          <small>Trade Days</small>
+          <strong>{dailyBreakdown.length}</strong>
         </div>
       </div>
 
-      <div className="grid" style={{ marginTop: 0 }}>
-        <div className="card-stat">
-          <small>Wins 🟢</small>
-          <strong style={{ color: '#10d9a0' }}>{wins}</strong>
-        </div>
-        <div className="card-stat">
-          <small>Losses 🔴</small>
-          <strong style={{ color: '#ff6475' }}>{losses}</strong>
-        </div>
-        <div className="card-stat">
-          <small>Deposits</small>
-          <strong>{deposits.length}</strong>
-        </div>
-        <div className="card-stat">
-          <small>Status</small>
-          <strong style={{ color: '#10d9a0', fontSize: 11 }}>Active</strong>
-        </div>
-      </div>
+      {/* Active investments */}
+      {deposits.length > 0 && (
+        <>
+          <h3>Active Investments</h3>
+          {deposits.map(d => {
+            const ratio = getMarginRatio(d.plan, d.amountNum);
+            const color = PLAN_COLOR[d.plan];
+            return (
+              <div key={d.id} style={{
+                background: 'var(--card-alt)', borderRadius: 12,
+                padding: '12px 14px', marginBottom: 8,
+                borderLeft: `3px solid ${color}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 13, color }}>{PLAN_LABEL[d.plan]}</span>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{d.timestamp} · {d.method}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, fontSize: 14 }}>{d.amount}</div>
+                    <div style={{ fontSize: 11, color, marginTop: 2 }}>{(ratio * 100).toFixed(0)}% profit share</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
 
-      {/* Portfolio chart */}
+      {/* Chart */}
       <div className="chart">
         <div className="chart-inner">
           <div className="chart-bars">
             {(chartPcts.length > 1 ? chartPcts : [40,55,48,70,62,80,75,88,72,95,84,100]).map((h, i) => (
-              <div
-                key={i}
-                className="chart-bar"
-                style={{
-                  height: `${h}%`,
-                  background: i === chartPcts.length - 1
-                    ? 'var(--accent)'
-                    : undefined,
-                }}
-              />
+              <div key={i} className="chart-bar" style={{
+                height: `${h}%`,
+                background: i === chartPcts.length - 1 ? '#10d9a0' : undefined,
+              }} />
             ))}
           </div>
           <small>Portfolio Performance</small>
         </div>
       </div>
 
-      {/* Trade history */}
-      <h3>Trade History {trades.length > 0 && <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 400 }}>({trades.length})</span>}</h3>
+      {/* Daily results */}
+      <h3>Daily Trade Results {dailyBreakdown.length > 0 && <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 400 }}>({dailyBreakdown.length})</span>}</h3>
 
-      {trades.length === 0 ? (
+      {dailyBreakdown.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-secondary)', background: 'var(--card-alt)', borderRadius: 14 }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
           <p style={{ margin: 0, fontSize: 13 }}>No trade results yet</p>
-          <p style={{ margin: '4px 0 0', fontSize: 12 }}>Your admin will post trade results here</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12 }}>Your admin will post daily results here</p>
         </div>
       ) : (
-        trades.map(t => {
-          const isWin = t.tradeType === 'win';
+        dailyBreakdown.map(d => {
+          const isWin  = d.userProfit >= 0;
+          const color  = isWin ? '#10d9a0' : '#ff6475';
           return (
-            <div key={t.id} className="txn-row" style={{ alignItems: 'flex-start' }}>
+            <div key={d.id} className="txn-row">
               <div className="txn-left">
                 <b style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
-                    width: 24, height: 24, borderRadius: 6, display: 'inline-flex',
+                    width: 26, height: 26, borderRadius: 6, display: 'inline-flex',
                     alignItems: 'center', justifyContent: 'center', fontSize: 13,
                     background: isWin ? 'rgba(16,217,160,0.12)' : 'rgba(255,100,117,0.12)',
                   }}>
                     {isWin ? '📈' : '📉'}
                   </span>
-                  Trade {isWin ? 'Profit' : 'Loss'}
+                  {d.date}
                 </b>
-                <small>{t.timestamp}</small>
-                {t.note && <small className="txn-note" style={{ marginTop: 2 }}>{t.note}</small>}
+                {d.note && <small className="txn-note">{d.note}</small>}
+                <small style={{ color: 'var(--text-secondary)' }}>
+                  Market: {d.tradePercent >= 0 ? '+' : ''}{d.tradePercent}%
+                </small>
               </div>
               <div className="txn-right">
-                <strong style={{ color: isWin ? '#10d9a0' : '#ff6475', fontSize: 15 }}>
-                  {isWin ? '+' : '-'}${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <strong style={{ color, fontSize: 15 }}>
+                  {isWin ? '+' : ''}${d.userProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </strong>
                 <span style={{
-                  fontSize: 11, fontWeight: 700,
-                  color: isWin ? '#10d9a0' : '#ff6475',
+                  fontSize: 11, fontWeight: 700, color,
                   background: isWin ? 'rgba(16,217,160,0.1)' : 'rgba(255,100,117,0.1)',
                   padding: '2px 7px', borderRadius: 6,
                 }}>
-                  {isWin ? '+' : '-'}{t.pnlPercent}%
+                  {isWin ? '+' : ''}{d.tradePercent}%
                 </span>
               </div>
             </div>
           );
         })
-      )}
-
-      {/* Deposit history */}
-      {deposits.length > 0 && (
-        <>
-          <h3 style={{ marginTop: 20 }}>Deposit History</h3>
-          {deposits.map(d => (
-            <div key={d.id} className="txn-row">
-              <div className="txn-left">
-                <b>Deposit</b>
-                <small>{d.timestamp}</small>
-                <small className="txn-note">{d.method}</small>
-              </div>
-              <div className="txn-right">
-                <strong className="green">{d.amount}</strong>
-                <span className={`txn-status ${d.status === 'Approved' ? 'green' : 'gold'}`}>{d.status}</span>
-              </div>
-            </div>
-          ))}
-        </>
       )}
     </>
   );

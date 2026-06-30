@@ -7,6 +7,8 @@
 import { supabase } from './supabase';
 
 /* ── Types ──────────────────────────────────── */
+export type InvestPlan = 'M' | 'Q' | 'Y';
+
 export interface StoreDeposit {
   id:        string;
   userName:  string;
@@ -17,6 +19,37 @@ export interface StoreDeposit {
   method:    string;
   timestamp: string;
   status:    'Pending' | 'Processing' | 'Approved' | 'Failed';
+  plan:      InvestPlan;
+}
+
+export interface StoreDailyResult {
+  id:           string;
+  date:         string;
+  tradePercent: number;  // positive = profit, negative = loss
+  note:         string;
+  timestamp:    string;
+}
+
+/* ── Margin ratio helper ─────────────────────── */
+export function getMarginRatio(plan: InvestPlan, amount: number): number {
+  if (plan === 'M') {
+    if (amount <= 3000)  return 0.30;
+    if (amount <= 30000) return 0.35;
+    return 0.40;
+  }
+  if (plan === 'Q') {
+    if (amount <= 3000)  return 0.40;
+    if (amount <= 30000) return 0.45;
+    return 0.50;
+  }
+  // Y
+  if (amount <= 3000)  return 0.50;
+  if (amount <= 30000) return 0.55;
+  return 0.60;
+}
+
+export function getPlanLabel(plan: InvestPlan): string {
+  return plan === 'M' ? 'Monthly (1 month)' : plan === 'Q' ? 'Quarterly (6 months)' : 'Yearly (12 months)';
 }
 
 export interface StoreKyc {
@@ -68,6 +101,7 @@ export async function getDeposits(): Promise<StoreDeposit[]> {
     method:    r.method,
     timestamp: r.timestamp,
     status:    r.status,
+    plan:      (r.plan ?? 'M') as InvestPlan,
   }));
 }
 
@@ -77,6 +111,7 @@ export async function addDeposit(
   type: 'Deposit' | 'Withdrawal',
   amountNum: number,
   method: string,
+  plan: InvestPlan = 'M',
 ): Promise<StoreDeposit> {
   const entry: StoreDeposit = {
     id:        `DEP-${uid().toUpperCase()}`,
@@ -88,6 +123,7 @@ export async function addDeposit(
     method,
     timestamp: now(),
     status:    'Pending',
+    plan,
   };
 
   await supabase.from('nc_deposits').insert({
@@ -100,6 +136,7 @@ export async function addDeposit(
     method:     entry.method,
     timestamp:  entry.timestamp,
     status:     entry.status,
+    plan:       entry.plan,
   });
 
   await addActivity({
@@ -314,7 +351,47 @@ export async function getDepositsByEmail(email: string): Promise<StoreDeposit[]>
     id: r.id, userName: r.user_name, userEmail: r.user_email,
     type: r.type, amount: r.amount, amountNum: r.amount_num,
     method: r.method, timestamp: r.timestamp, status: r.status,
+    plan: (r.plan ?? 'M') as InvestPlan,
   }));
+}
+
+/* ── Daily Trade Results (global) ────────────── */
+export async function getDailyResults(): Promise<StoreDailyResult[]> {
+  const { data, error } = await supabase
+    .from('nc_daily_results')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(365);
+  if (error) { console.error('getDailyResults:', error.message); return []; }
+  return (data ?? []).map(r => ({
+    id:           r.id,
+    date:         r.date,
+    tradePercent: r.trade_percent,
+    note:         r.note ?? '',
+    timestamp:    r.timestamp ?? '',
+  }));
+}
+
+export async function addDailyResult(
+  date: string,
+  tradePercent: number,
+  note: string,
+): Promise<StoreDailyResult> {
+  const entry: StoreDailyResult = {
+    id:           `DR-${uid().toUpperCase()}`,
+    date,
+    tradePercent,
+    note,
+    timestamp:    now(),
+  };
+  await supabase.from('nc_daily_results').insert({
+    id:            entry.id,
+    date:          entry.date,
+    trade_percent: entry.tradePercent,
+    note:          entry.note,
+    timestamp:     entry.timestamp,
+  });
+  return entry;
 }
 
 /* ── Poll KYC status by email (user side) ────── */

@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent } from 'react';
 import { transactions, portfolio, walletAssets } from '../../lib/appData';
-import { addDeposit } from '../../lib/store';
+import { addDeposit, getMarginRatio, type InvestPlan } from '../../lib/store';
 import Title from '../ui/Title';
 
 interface WalletProps {
@@ -86,12 +86,19 @@ function copyToClipboard(text: string, notify: (msg: string) => void) {
 }
 
 /* ── Deposit Modal ───────────────────────────────── */
+const PLANS: { id: InvestPlan; label: string; period: string; desc: string; color: string }[] = [
+  { id: 'M', label: 'M Plan', period: '1 Month',   desc: '30–40% of profits', color: '#3b82f6' },
+  { id: 'Q', label: 'Q Plan', period: '6 Months',  desc: '40–50% of profits/mo', color: '#8b5cf6' },
+  { id: 'Y', label: 'Y Plan', period: '12 Months', desc: '50–60% of profits/mo', color: '#10d9a0' },
+];
+
 function DepositModal({ notify, userName, userEmail, onClose }: {
   notify: (msg: string) => void;
   userName: string; userEmail: string;
   onClose: () => void;
 }) {
   const [step,       setStep]       = useState<1 | 2 | 3>(1);
+  const [plan,       setPlan]       = useState<InvestPlan>('M');
   const [methodType, setMethodType] = useState<MethodType>('crypto');
   const [cryptoIdx,  setCryptoIdx]  = useState(0);
   const [bankIdx,    setBankIdx]    = useState(0);
@@ -113,7 +120,7 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
   async function submit() {
     if (!isValid) return;
     setSubmitting(true);
-    const entry = await addDeposit(userName, userEmail, 'Deposit', amountNum, methodLabel);
+    const entry = await addDeposit(userName, userEmail, 'Deposit', amountNum, methodLabel, plan);
     notify(`✓ Deposit ${entry.amount} submitted — ${entry.id}`);
     setSubmitting(false);
     onClose();
@@ -138,10 +145,32 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
           <button type="button" className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {/* ── Step 1: Choose method type ── */}
+        {/* ── Step 1: Plan + method ── */}
         {step === 1 && (
           <div>
-            <p className="wm-label">Select deposit method</p>
+            {/* Plan selection */}
+            <p className="wm-label" style={{ marginBottom: 8 }}>Investment Plan</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
+              {PLANS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPlan(p.id)}
+                  style={{
+                    padding: '10px 6px', borderRadius: 10, border: '1.5px solid',
+                    borderColor: plan === p.id ? p.color : 'var(--border)',
+                    background: plan === p.id ? `${p.color}18` : 'var(--card-alt)',
+                    cursor: 'pointer', textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 14, color: plan === p.id ? p.color : 'var(--text-primary)' }}>{p.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{p.period}</div>
+                  <div style={{ fontSize: 10, color: p.color, marginTop: 2 }}>{p.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            <p className="wm-label">Payment Method</p>
             <div className="wm-type-tabs">
               <button
                 type="button"
@@ -336,6 +365,8 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
                 </strong>
               </div>
               <div className="breakdown-row"><span>Method</span><strong>{methodLabel}</strong></div>
+              <div className="breakdown-row"><span>Plan</span><strong>{PLANS.find(p => p.id === plan)?.label} · {PLANS.find(p => p.id === plan)?.period}</strong></div>
+              <div className="breakdown-row"><span>Your Share</span><strong style={{ color: '#10d9a0' }}>{(getMarginRatio(plan, amountNum) * 100).toFixed(0)}% of profits</strong></div>
               <div className="breakdown-row"><span>Status</span><strong style={{ color: '#ffd97a' }}>Pending Review</strong></div>
             </div>
 
