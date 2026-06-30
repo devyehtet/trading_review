@@ -3562,23 +3562,25 @@ body {
    Wallet Modal
    ============================================ */
 .wallet-modal-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.80);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 200;
-  border-radius: inherit;
+  z-index: 999;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .wallet-modal {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: #0e1528;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px 20px 0 0;
   padding: 20px 18px 28px;
   width: 100%;
-  max-height: 88%;
+  max-width: 430px;
+  max-height: 88vh;
   overflow-y: auto;
 }
 
