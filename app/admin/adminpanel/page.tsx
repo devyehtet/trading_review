@@ -9,8 +9,8 @@ import { adminRequests, investors } from '../../../lib/appData';
 import type { AdminRequest, Investor } from '../../../lib/types';
 import {
   getDeposits, getKycEvents, getActivities, updateKycStatus,
-  getTradeResults, addTradeResult,
-  type StoreDeposit, type StoreKyc, type StoreActivity, type StoreTradeResult,
+  getDailyResults, addDailyResult,
+  type StoreDeposit, type StoreKyc, type StoreActivity, type StoreDailyResult,
 } from '../../../lib/store';
 
 /* ─────────────────────────────────────────────────
@@ -77,28 +77,25 @@ export default function AdminPage() {
   const [kycLive,      setKycLive]      = useState<StoreKyc[]>([]);
   const [activities,   setActivities]   = useState<StoreActivity[]>([]);
   const [docPreviewUrl,setDocPreviewUrl]= useState<string | null>(null);
-  const [tradeResults, setTradeResults] = useState<StoreTradeResult[]>([]);
-  const [trEmail,      setTrEmail]      = useState('');
-  const [trName,       setTrName]       = useState('');
-  const [trType,       setTrType]       = useState<'win'|'loss'>('win');
-  const [trAmount,     setTrAmount]     = useState('');
-  const [trPercent,    setTrPercent]    = useState('');
-  const [trNote,       setTrNote]       = useState('');
-  const [trSubmitting, setTrSubmitting] = useState(false);
+  const [dailyResults, setDailyResults] = useState<StoreDailyResult[]>([]);
+  const [drDate,       setDrDate]       = useState(() => new Date().toISOString().slice(0, 10));
+  const [drPercent,    setDrPercent]    = useState('');
+  const [drNote,       setDrNote]       = useState('');
+  const [drSubmitting, setDrSubmitting] = useState(false);
 
   /* Live-refresh every 5 s */
   useEffect(() => {
     async function refresh() {
-      const [deps, kycs, acts, trs] = await Promise.all([
+      const [deps, kycs, acts, drs] = await Promise.all([
         getDeposits(),
         getKycEvents(),
         getActivities(),
-        getTradeResults(),
+        getDailyResults(),
       ]);
       setDeposits(deps);
       setKycLive(kycs);
       setActivities(acts);
-      setTradeResults(trs);
+      setDailyResults(drs);
     }
     refresh();
     const id = setInterval(refresh, 5000);
@@ -191,20 +188,16 @@ export default function AdminPage() {
     }
   }
 
-  /* ── unique depositors for trade form ── */
-  const depositors = Array.from(
-    new Map(deposits.map(d => [d.userEmail, { email: d.userEmail, name: d.userName }])).values()
-  );
-
-  async function submitTrade() {
-    if (!trEmail || !trAmount) return;
-    setTrSubmitting(true);
-    await addTradeResult(trEmail, trName, trType, parseFloat(trAmount), parseFloat(trPercent) || 0, trNote);
-    notify(`✓ Trade result posted for ${trName || trEmail}`);
-    setTrAmount(''); setTrPercent(''); setTrNote('');
-    const trs = await getTradeResults();
-    setTradeResults(trs);
-    setTrSubmitting(false);
+  async function submitDailyResult() {
+    const pct = parseFloat(drPercent);
+    if (isNaN(pct) || !drDate) return;
+    setDrSubmitting(true);
+    await addDailyResult(drDate, pct, drNote);
+    notify(`✓ Daily result posted: ${pct >= 0 ? '+' : ''}${pct}% for ${drDate}`);
+    setDrPercent(''); setDrNote('');
+    const drs = await getDailyResults();
+    setDailyResults(drs);
+    setDrSubmitting(false);
   }
 
   const pending     = apps.filter(a => a.status === 'Pending').length;
@@ -508,89 +501,56 @@ export default function AdminPage() {
         {/* ── TRADES ────────────────────────── */}
         {tab === 'trades' && (
           <>
-            {/* Post trade result form */}
+            {/* Post daily result form */}
             <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, marginBottom: 24 }}>
-              <div className="ap-section-title" style={{ marginBottom: 16 }}>Post Trade Result</div>
+              <div className="ap-section-title" style={{ marginBottom: 4 }}>Post Daily Trade Result</div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Enter today's market % — all depositors will see their profit/loss automatically based on their plan.
+              </p>
 
-              {/* User select */}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Select User</label>
-                <select
-                  className="kyc-input"
-                  value={trEmail}
-                  onChange={e => {
-                    const dep = depositors.find(d => d.email === e.target.value);
-                    setTrEmail(e.target.value);
-                    setTrName(dep?.name ?? '');
-                  }}
-                >
-                  <option value="">— Choose depositor —</option>
-                  {depositors.map(d => (
-                    <option key={d.email} value={d.email}>{d.name || d.email} ({d.email})</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Win / Loss */}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Result</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setTrType('win')}
-                    style={{
-                      padding: '10px', borderRadius: 10, border: '1.5px solid',
-                      borderColor: trType === 'win' ? '#10d9a0' : 'var(--border)',
-                      background: trType === 'win' ? 'rgba(16,217,160,0.1)' : 'var(--card-alt)',
-                      color: trType === 'win' ? '#10d9a0' : 'var(--text-secondary)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: 14,
-                    }}
-                  >📈 Win / Profit</button>
-                  <button
-                    type="button"
-                    onClick={() => setTrType('loss')}
-                    style={{
-                      padding: '10px', borderRadius: 10, border: '1.5px solid',
-                      borderColor: trType === 'loss' ? '#ff6475' : 'var(--border)',
-                      background: trType === 'loss' ? 'rgba(255,100,117,0.1)' : 'var(--card-alt)',
-                      color: trType === 'loss' ? '#ff6475' : 'var(--text-secondary)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: 14,
-                    }}
-                  >📉 Loss</button>
-                </div>
-              </div>
-
-              {/* Amount + Percent */}
+              {/* Date + Percent */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                    {trType === 'win' ? 'Profit' : 'Loss'} Amount (USD)
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: 14 }}>$</span>
-                    <input
-                      className="kyc-input" style={{ paddingLeft: 24 }}
-                      type="number" min="0" placeholder="0.00"
-                      value={trAmount}
-                      onChange={e => setTrAmount(e.target.value)}
-                    />
-                  </div>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Trade Date</label>
+                  <input
+                    className="kyc-input"
+                    type="date"
+                    value={drDate}
+                    onChange={e => setDrDate(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                    Percentage (%)
+                    Result % <span style={{ color: '#10d9a0' }}>(+ profit)</span> / <span style={{ color: '#ff6475' }}>(− loss)</span>
                   </label>
                   <div style={{ position: 'relative' }}>
                     <input
-                      className="kyc-input" style={{ paddingRight: 28 }}
-                      type="number" min="0" placeholder="0.00"
-                      value={trPercent}
-                      onChange={e => setTrPercent(e.target.value)}
+                      className="kyc-input"
+                      style={{ paddingRight: 28 }}
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 3.5 or -1.2"
+                      value={drPercent}
+                      onChange={e => setDrPercent(e.target.value)}
                     />
                     <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: 14 }}>%</span>
                   </div>
                 </div>
               </div>
+
+              {/* Preview */}
+              {drPercent !== '' && !isNaN(parseFloat(drPercent)) && (
+                <div style={{
+                  background: parseFloat(drPercent) >= 0 ? 'rgba(16,217,160,0.08)' : 'rgba(255,100,117,0.08)',
+                  border: `1px solid ${parseFloat(drPercent) >= 0 ? 'rgba(16,217,160,0.25)' : 'rgba(255,100,117,0.25)'}`,
+                  borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12,
+                }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Preview · $10,000 deposit at M Plan (35%) → </span>
+                  <strong style={{ color: parseFloat(drPercent) >= 0 ? '#10d9a0' : '#ff6475' }}>
+                    {parseFloat(drPercent) >= 0 ? '+' : ''}${(10000 * (parseFloat(drPercent) / 100) * 0.35).toFixed(2)} today
+                  </strong>
+                </div>
+              )}
 
               {/* Note */}
               <div style={{ marginBottom: 16 }}>
@@ -598,9 +558,9 @@ export default function AdminPage() {
                 <input
                   className="kyc-input"
                   type="text"
-                  placeholder="e.g. BTC/USDT Long · 2x leverage"
-                  value={trNote}
-                  onChange={e => setTrNote(e.target.value)}
+                  placeholder="e.g. BTC/USDT breakout · strong momentum"
+                  value={drNote}
+                  onChange={e => setDrNote(e.target.value)}
                 />
               </div>
 
@@ -608,41 +568,39 @@ export default function AdminPage() {
                 type="button"
                 className="ap-btn approve"
                 style={{ width: '100%' }}
-                onClick={submitTrade}
-                disabled={!trEmail || !trAmount || trSubmitting}
+                onClick={submitDailyResult}
+                disabled={!drDate || drPercent === '' || drSubmitting}
               >
-                {trSubmitting ? 'Posting…' : `✓ Post ${trType === 'win' ? 'Profit' : 'Loss'} Result`}
+                {drSubmitting ? 'Posting…' : `✓ Post Daily Result`}
               </button>
             </div>
 
-            {/* All trade results */}
-            <div className="ap-section-title">All Trade Results ({tradeResults.length})</div>
-            {tradeResults.length === 0 ? (
-              <div className="ap-empty-state"><span>📊</span><p>No trade results posted yet</p></div>
+            {/* Daily results history */}
+            <div className="ap-section-title">
+              Daily Results History
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 13, marginLeft: 6 }}>({dailyResults.length})</span>
+            </div>
+            {dailyResults.length === 0 ? (
+              <div className="ap-empty-state"><span>📊</span><p>No daily results posted yet</p></div>
             ) : (
               <div className="ap-table">
-                <div className="ap-table-head" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr' }}>
-                  <span>User</span><span>Result</span><span>Amount</span><span>Time</span>
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1fr 2fr 1fr' }}>
+                  <span>Date</span><span>Result</span><span>Note</span><span>Posted</span>
                 </div>
-                {tradeResults.map(t => (
-                  <div key={t.id} className="ap-table-row" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{t.userName || t.userEmail}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t.note || '—'}</div>
+                {dailyResults.map(d => {
+                  const isWin = d.tradePercent >= 0;
+                  const color = isWin ? '#10d9a0' : '#ff6475';
+                  return (
+                    <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1fr 2fr 1fr' }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{d.date}</span>
+                      <span style={{ fontWeight: 800, color, fontSize: 14 }}>
+                        {isWin ? '📈 +' : '📉 '}{d.tradePercent}%
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{d.note || '—'}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.timestamp}</span>
                     </div>
-                    <span style={{
-                      fontWeight: 700, fontSize: 12,
-                      color: t.tradeType === 'win' ? '#10d9a0' : '#ff6475',
-                    }}>
-                      {t.tradeType === 'win' ? '📈 Win' : '📉 Loss'}
-                    </span>
-                    <span style={{ fontWeight: 700, color: t.tradeType === 'win' ? '#10d9a0' : '#ff6475' }}>
-                      {t.tradeType === 'win' ? '+' : '-'}${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      {t.pnlPercent > 0 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}> ({t.pnlPercent}%)</span>}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t.timestamp}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
