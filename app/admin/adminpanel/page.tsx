@@ -76,7 +76,8 @@ export default function AdminPage() {
   const [deposits,     setDeposits]     = useState<StoreDeposit[]>([]);
   const [kycLive,      setKycLive]      = useState<StoreKyc[]>([]);
   const [activities,   setActivities]   = useState<StoreActivity[]>([]);
-  const [docPreviewUrl,setDocPreviewUrl]= useState<string | null>(null);
+  const [docPreviewUrl,    setDocPreviewUrl]    = useState<string | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [dailyResults, setDailyResults] = useState<StoreDailyResult[]>([]);
   const [drDate,       setDrDate]       = useState(() => new Date().toISOString().slice(0, 10));
   const [drPercent,    setDrPercent]    = useState('');
@@ -639,13 +640,13 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="ap-table" style={{ marginBottom: 24 }}>
-                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 1fr 0.8fr 1fr' }}>
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 0.8fr 0.7fr 1.3fr' }}>
                   <span>ID</span><span>User</span><span>Amount</span><span>Method</span><span>Status</span><span>Action</span>
                 </div>
                 {deposits.map((d: StoreDeposit) => {
                   const statusColor = d.status === 'Approved' ? '#10d9a0' : d.status === 'Failed' ? '#ff6475' : '#ffd97a';
                   return (
-                    <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 1fr 0.8fr 1fr' }}>
+                    <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 0.8fr 0.7fr 1.3fr' }}>
                       <div>
                         <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{d.id}</span>
                         <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{d.plan} Plan · {d.timestamp}</div>
@@ -661,7 +662,18 @@ export default function AdminPage() {
                       <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>
                         {d.status}
                       </span>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {d.screenshotUrl && (
+                          <button
+                            type="button"
+                            style={{
+                              padding: '5px 10px', borderRadius: 8, border: 'none',
+                              background: 'rgba(96,165,250,0.15)', color: '#60a5fa',
+                              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                            }}
+                            onClick={() => setScreenshotPreview(d.screenshotUrl!)}
+                          >🖼 View</button>
+                        )}
                         {d.status !== 'Approved' && (
                           <button
                             type="button"
@@ -676,7 +688,7 @@ export default function AdminPage() {
                               const deps = await getDeposits();
                               setDeposits(deps);
                             }}
-                          >✓ Approve</button>
+                          >✓</button>
                         )}
                         {d.status !== 'Failed' && d.status !== 'Approved' && (
                           <button
@@ -692,9 +704,9 @@ export default function AdminPage() {
                               const deps = await getDeposits();
                               setDeposits(deps);
                             }}
-                          >✕ Reject</button>
+                          >✕</button>
                         )}
-                        {(d.status === 'Approved' || d.status === 'Failed') && (
+                        {!d.screenshotUrl && (d.status === 'Approved' || d.status === 'Failed') && (
                           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>—</span>
                         )}
                       </div>
@@ -766,6 +778,48 @@ export default function AdminPage() {
 
       {/* Toast */}
       {toast && <div className="ap-toast">{toast}</div>}
+
+      {/* Deposit Screenshot Modal */}
+      {screenshotPreview && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1001,
+            background: 'rgba(0,0,0,0.9)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => setScreenshotPreview(null)}
+        >
+          <div
+            style={{
+              background: 'var(--card)', borderRadius: 16, padding: 20,
+              maxWidth: '85vw', maxHeight: '88vh',
+              display: 'flex', flexDirection: 'column', gap: 12,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>💳 Payment Screenshot</span>
+              <button
+                type="button"
+                onClick={() => setScreenshotPreview(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-secondary)' }}
+              >✕</button>
+            </div>
+            <img
+              src={screenshotPreview}
+              alt="Payment Screenshot"
+              style={{ maxWidth: '75vw', maxHeight: '75vh', objectFit: 'contain', borderRadius: 8 }}
+            />
+            <a
+              href={screenshotPreview}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center' }}
+            >↗ Open in new tab</a>
+          </div>
+        </div>
+      )}
 
       {/* Document Preview Modal */}
       {docPreviewUrl && (

@@ -10,16 +10,17 @@ import { supabase } from './supabase';
 export type InvestPlan = 'M' | 'Q' | 'Y';
 
 export interface StoreDeposit {
-  id:        string;
-  userName:  string;
-  userEmail: string;
-  type:      'Deposit' | 'Withdrawal';
-  amount:    string;
-  amountNum: number;
-  method:    string;
-  timestamp: string;
-  status:    'Pending' | 'Processing' | 'Approved' | 'Failed';
-  plan:      InvestPlan;
+  id:            string;
+  userName:      string;
+  userEmail:     string;
+  type:          'Deposit' | 'Withdrawal';
+  amount:        string;
+  amountNum:     number;
+  method:        string;
+  timestamp:     string;
+  status:        'Pending' | 'Processing' | 'Approved' | 'Failed';
+  plan:          InvestPlan;
+  screenshotUrl?: string;
 }
 
 export interface StoreDailyResult {
@@ -92,17 +93,32 @@ export async function getDeposits(): Promise<StoreDeposit[]> {
     .limit(100);
   if (error) { console.error('getDeposits:', error.message); return []; }
   return (data ?? []).map(r => ({
-    id:        r.id,
-    userName:  r.user_name,
-    userEmail: r.user_email,
-    type:      r.type,
-    amount:    r.amount,
-    amountNum: r.amount_num,
-    method:    r.method,
-    timestamp: r.timestamp,
-    status:    r.status,
-    plan:      (r.plan ?? 'M') as InvestPlan,
+    id:            r.id,
+    userName:      r.user_name,
+    userEmail:     r.user_email,
+    type:          r.type,
+    amount:        r.amount,
+    amountNum:     r.amount_num,
+    method:        r.method,
+    timestamp:     r.timestamp,
+    status:        r.status,
+    plan:          (r.plan ?? 'M') as InvestPlan,
+    screenshotUrl: r.screenshot_url ?? undefined,
   }));
+}
+
+export async function uploadDepositScreenshot(
+  file: File,
+  depositId: string,
+): Promise<string | null> {
+  const ext  = file.name.split('.').pop() ?? 'jpg';
+  const path = `${depositId}.${ext}`;
+  const { error } = await supabase.storage
+    .from('deposit-screenshots')
+    .upload(path, file, { upsert: true });
+  if (error) { console.error('uploadDepositScreenshot:', error.message); return null; }
+  const { data } = supabase.storage.from('deposit-screenshots').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function addDeposit(
@@ -112,6 +128,7 @@ export async function addDeposit(
   amountNum: number,
   method: string,
   plan: InvestPlan = 'M',
+  screenshotUrl?: string,
 ): Promise<StoreDeposit> {
   const entry: StoreDeposit = {
     id:        `DEP-${uid().toUpperCase()}`,
@@ -124,19 +141,21 @@ export async function addDeposit(
     timestamp: now(),
     status:    'Pending',
     plan,
+    screenshotUrl,
   };
 
   await supabase.from('nc_deposits').insert({
-    id:         entry.id,
-    user_name:  entry.userName,
-    user_email: entry.userEmail,
-    type:       entry.type,
-    amount:     entry.amount,
-    amount_num: entry.amountNum,
-    method:     entry.method,
-    timestamp:  entry.timestamp,
-    status:     entry.status,
-    plan:       entry.plan,
+    id:             entry.id,
+    user_name:      entry.userName,
+    user_email:     entry.userEmail,
+    type:           entry.type,
+    amount:         entry.amount,
+    amount_num:     entry.amountNum,
+    method:         entry.method,
+    timestamp:      entry.timestamp,
+    status:         entry.status,
+    plan:           entry.plan,
+    screenshot_url: entry.screenshotUrl ?? null,
   });
 
   await addActivity({
@@ -363,6 +382,7 @@ export async function getDepositsByEmail(email: string): Promise<StoreDeposit[]>
     type: r.type, amount: r.amount, amountNum: r.amount_num,
     method: r.method, timestamp: r.timestamp, status: r.status,
     plan: (r.plan ?? 'M') as InvestPlan,
+    screenshotUrl: r.screenshot_url ?? undefined,
   }));
 }
 

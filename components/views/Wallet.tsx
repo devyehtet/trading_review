@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent } from 'react';
 import { transactions, portfolio, walletAssets } from '../../lib/appData';
-import { addDeposit, getMarginRatio, type InvestPlan } from '../../lib/store';
+import { addDeposit, uploadDepositScreenshot, getMarginRatio, type InvestPlan } from '../../lib/store';
 import Title from '../ui/Title';
 
 interface WalletProps {
@@ -97,13 +97,15 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
   userName: string; userEmail: string;
   onClose: () => void;
 }) {
-  const [step,       setStep]       = useState<1 | 2 | 3>(1);
-  const [plan,       setPlan]       = useState<InvestPlan>('M');
-  const [methodType, setMethodType] = useState<MethodType>('crypto');
-  const [cryptoIdx,  setCryptoIdx]  = useState(0);
-  const [bankIdx,    setBankIdx]    = useState(0);
-  const [amount,     setAmount]     = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [step,          setStep]          = useState<1 | 2 | 3>(1);
+  const [plan,          setPlan]          = useState<InvestPlan>('M');
+  const [methodType,    setMethodType]    = useState<MethodType>('crypto');
+  const [cryptoIdx,     setCryptoIdx]     = useState(0);
+  const [bankIdx,       setBankIdx]       = useState(0);
+  const [amount,        setAmount]        = useState('');
+  const [screenshot,    setScreenshot]    = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [submitting,    setSubmitting]    = useState(false);
 
   const crypto   = CRYPTO_METHODS[cryptoIdx];
   const bank     = BANK_METHODS[bankIdx];
@@ -120,7 +122,14 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
   async function submit() {
     if (!isValid) return;
     setSubmitting(true);
-    const entry = await addDeposit(userName, userEmail, 'Deposit', amountNum, methodLabel, plan);
+    // Upload screenshot first if provided
+    let screenshotUrl: string | undefined;
+    if (screenshot) {
+      const tempId = `DEP-TEMP-${Date.now()}`;
+      const url = await uploadDepositScreenshot(screenshot, tempId);
+      screenshotUrl = url ?? undefined;
+    }
+    const entry = await addDeposit(userName, userEmail, 'Deposit', amountNum, methodLabel, plan, screenshotUrl);
     notify(`✓ Deposit ${entry.amount} submitted — ${entry.id}`);
     setSubmitting(false);
     onClose();
@@ -335,9 +344,53 @@ function DepositModal({ notify, userName, userEmail, onClose }: {
               ))}
             </div>
 
+            {/* Payment screenshot upload */}
+            <div className="kyc-field" style={{ marginTop: 4 }}>
+              <label className="kyc-label">Payment Screenshot <span style={{ color: '#ffd97a' }}>(Required)</span></label>
+              <label style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 8, padding: '14px', borderRadius: 14, cursor: 'pointer',
+                border: `2px dashed ${screenshot ? 'rgba(16,217,160,0.5)' : 'var(--border)'}`,
+                background: screenshot ? 'rgba(16,217,160,0.06)' : 'var(--bg-surface)',
+                transition: 'all 0.15s ease',
+              }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setScreenshot(file);
+                    setScreenshotPreview(URL.createObjectURL(file));
+                  }}
+                />
+                {screenshotPreview ? (
+                  <img src={screenshotPreview} alt="screenshot" style={{ width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 8 }} />
+                ) : (
+                  <>
+                    <span style={{ fontSize: 24 }}>📷</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                      ငွေလွှဲကြောင်း screenshot ထည့်ပေးပါ<br/>
+                      <span style={{ fontSize: 11 }}>Tap to upload image</span>
+                    </span>
+                  </>
+                )}
+              </label>
+              {screenshot && (
+                <button
+                  type="button"
+                  onClick={() => { setScreenshot(null); setScreenshotPreview(null); }}
+                  style={{ background: 'none', border: 'none', color: '#ff6475', fontSize: 11, cursor: 'pointer', marginTop: 4, padding: 0 }}
+                >
+                  ✕ Remove image
+                </button>
+              )}
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button type="button" className="btn-back" onClick={() => setStep(1)}>← Back</button>
-              <button type="button" className="btn-next" onClick={() => setStep(3)} disabled={!isValid}>
+              <button type="button" className="btn-next" onClick={() => setStep(3)} disabled={!isValid || !screenshot}>
                 Next →
               </button>
             </div>
