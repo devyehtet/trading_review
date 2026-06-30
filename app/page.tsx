@@ -130,7 +130,7 @@ export default function HomePage() {
       <>
         {view === 'home'      && <Home            notify={notify} setView={setView} />}
         {view === 'plans'     && <Plans           notify={notify} setView={setView} />}
-        {view === 'dashboard' && <Dashboard />}
+        {view === 'dashboard' && <Dashboard userEmail={user.email} userName={user.name} />}
         {view === 'markets'   && <Markets   />}
         {view === 'wallet'    && <Wallet          notify={notify} userName={user.name} userEmail={user.email} />}
         {view === 'admin'     && <Admin           notify={notify} />}

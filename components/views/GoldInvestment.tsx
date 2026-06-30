@@ -6,7 +6,6 @@ interface GoldInvestmentProps {
   notify: (msg: string) => void;
 }
 
-/* ── Constants ──────────────────────────────────── */
 const BASE_SPOT   = 2_338.50;   // XAU/USD starting price (oz)
 const SPREAD      = 2.00;       // $2 total spread → ±$1 each side
 const HALF_SPREAD = SPREAD / 2;
@@ -15,7 +14,6 @@ const MIN_OZ      = 0.001;
 const TROY_G      = 31.1035;    // grams per troy ounce
 const HISTORY_LEN = 24;
 
-/* ── Helpers ────────────────────────────────────── */
 function fmtUSD(n: number, dp = 2) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
@@ -27,7 +25,6 @@ function randomWalk(prev: number, pct: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, prev + delta));
 }
 
-/* ── Simulated trade history ──────────────────── */
 const DEMO_TRADES = [
   { side: 'Buy',  oz: '0.050', price: '2,331.20', date: 'Jun 23' },
   { side: 'Buy',  oz: '0.025', price: '2,298.70', date: 'Jun 20' },
@@ -45,7 +42,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
   const [tab,     setTab]     = useState<'trade' | 'portfolio'>('trade');
   const prevSpot = useRef(BASE_SPOT);
 
-  /* ── Live price simulation ─────────────────── */
   useEffect(() => {
     const id = setInterval(() => {
       setSpot((p) => {
@@ -60,23 +56,19 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
     return () => clearInterval(id);
   }, []);
 
-  /* ── Derived prices ────────────────────────── */
   const buyPrice  = spot + HALF_SPREAD;
   const sellPrice = spot - HALF_SPREAD;
   const tradePrice = mode === 'buy' ? buyPrice : sellPrice;
 
-  /* ── Input parsing ─────────────────────────── */
   const ozNum   = parseFloat(ozInput) || 0;
   const usdCost = ozNum > 0 ? ozNum * tradePrice : 0;
   const mmkCost = usdCost * mmkRate;
   const grams   = ozNum * TROY_G;
   const isValid = ozNum >= MIN_OZ;
 
-  /* ── Daily change vs. base ─────────────────── */
   const dayChange    = spot - BASE_SPOT;
   const dayChangePct = (dayChange / BASE_SPOT) * 100;
 
-  /* ── Chart normalise ───────────────────────── */
   const hMax  = Math.max(...history);
   const hMin  = Math.min(...history);
   const hRange = hMax - hMin || 1;
@@ -99,7 +91,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
 
   return (
     <div>
-      {/* ── Header card ─────────────────────── */}
       <div className="gold-hero">
         <div className="gold-hero-top">
           <div className="gold-hero-left">
@@ -117,7 +108,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
           </div>
         </div>
 
-        {/* Spread row */}
         <div className="gold-spread-row">
           <div className="spread-cell">
             <span>Buy</span>
@@ -130,7 +120,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
           </div>
         </div>
 
-        {/* Exchange rate */}
         <div className="gold-rate-row">
           <span className="gold-rate-label">Exchange Rate</span>
           <span className="gold-rate-value">
@@ -139,7 +128,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
         </div>
       </div>
 
-      {/* ── Mini price chart ────────────────── */}
       <div className="gold-chart-wrap">
         <div className="gold-chart-bars">
           {history.map((v, i) => {
@@ -161,7 +149,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
         </div>
       </div>
 
-      {/* ── Tab toggle ──────────────────────── */}
       <div className="switch" style={{ margin: '14px 0' }}>
         <button
           type="button"
@@ -181,7 +168,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
 
       {tab === 'trade' && (
         <>
-          {/* ── Buy / Sell toggle ─────────── */}
           <div className="gold-bs-toggle">
             <button
               type="button"
@@ -199,7 +185,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
             </button>
           </div>
 
-          {/* ── Amount input ──────────────── */}
           <div className="gold-input-wrap">
             <label className="kyc-label">Amount (troy ounces)</label>
             <div className="gold-input-row">
@@ -215,7 +200,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
               <span className="gold-unit">oz</span>
             </div>
 
-            {/* Quick amounts */}
             <div className="gold-quick-row">
               {[0.001, 0.01, 0.05, 0.1].map((q) => (
                 <button key={q} type="button" className="quick-btn" onClick={() => setQuick(q)}>
@@ -225,7 +209,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
             </div>
           </div>
 
-          {/* ── Cost breakdown ────────────── */}
           {ozNum > 0 && (
             <div className="gold-breakdown">
               <div className="breakdown-row">
@@ -278,7 +261,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
 
       {tab === 'portfolio' && (
         <>
-          {/* ── Holdings summary ──────────── */}
           <div className="gold-holding-card">
             <div className="holding-row">
               <span>Total Holdings</span>
@@ -308,7 +290,6 @@ export default function GoldInvestment({ notify }: GoldInvestmentProps) {
             </div>
           </div>
 
-          {/* ── Trade history ─────────────── */}
           <div className="gold-section-label">Recent Trades</div>
           {DEMO_TRADES.map((t, i) => (
             <div key={i} className="gold-trade-row">

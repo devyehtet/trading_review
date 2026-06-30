@@ -9,7 +9,8 @@ import { adminRequests, investors } from '../../../lib/appData';
 import type { AdminRequest, Investor } from '../../../lib/types';
 import {
   getDeposits, getKycEvents, getActivities, updateKycStatus,
-  type StoreDeposit, type StoreKyc, type StoreActivity,
+  getTradeResults, addTradeResult,
+  type StoreDeposit, type StoreKyc, type StoreActivity, type StoreTradeResult,
 } from '../../../lib/store';
 
 /* ─────────────────────────────────────────────────
@@ -42,7 +43,7 @@ const INIT_APPS: KycApp[] = [
   { id: 'KYC-010', name: 'Ei Phyu Win',    email: 'eiphyu@email.com',    nationality: 'Myanmar',   idType: 'Passport',     submitted: 'Jun 21, 11:05', status: 'Approved',     risk: 'Medium', pep: false, income: '$50k–$100k'  },
 ];
 
-type AdminTab  = 'overview' | 'kyc' | 'investors' | 'activity';
+type AdminTab  = 'overview' | 'kyc' | 'investors' | 'activity' | 'trades';
 type KycFilter = 'All' | KycApp['status'];
 
 const STATUS_COLOR: Record<string, string> = {
@@ -76,18 +77,28 @@ export default function AdminPage() {
   const [kycLive,      setKycLive]      = useState<StoreKyc[]>([]);
   const [activities,   setActivities]   = useState<StoreActivity[]>([]);
   const [docPreviewUrl,setDocPreviewUrl]= useState<string | null>(null);
+  const [tradeResults, setTradeResults] = useState<StoreTradeResult[]>([]);
+  const [trEmail,      setTrEmail]      = useState('');
+  const [trName,       setTrName]       = useState('');
+  const [trType,       setTrType]       = useState<'win'|'loss'>('win');
+  const [trAmount,     setTrAmount]     = useState('');
+  const [trPercent,    setTrPercent]    = useState('');
+  const [trNote,       setTrNote]       = useState('');
+  const [trSubmitting, setTrSubmitting] = useState(false);
 
   /* Live-refresh every 5 s */
   useEffect(() => {
     async function refresh() {
-      const [deps, kycs, acts] = await Promise.all([
+      const [deps, kycs, acts, trs] = await Promise.all([
         getDeposits(),
         getKycEvents(),
         getActivities(),
+        getTradeResults(),
       ]);
       setDeposits(deps);
       setKycLive(kycs);
       setActivities(acts);
+      setTradeResults(trs);
     }
     refresh();
     const id = setInterval(refresh, 5000);
@@ -180,6 +191,22 @@ export default function AdminPage() {
     }
   }
 
+  /* ── unique depositors for trade form ── */
+  const depositors = Array.from(
+    new Map(deposits.map(d => [d.userEmail, { email: d.userEmail, name: d.userName }])).values()
+  );
+
+  async function submitTrade() {
+    if (!trEmail || !trAmount) return;
+    setTrSubmitting(true);
+    await addTradeResult(trEmail, trName, trType, parseFloat(trAmount), parseFloat(trPercent) || 0, trNote);
+    notify(`✓ Trade result posted for ${trName || trEmail}`);
+    setTrAmount(''); setTrPercent(''); setTrNote('');
+    const trs = await getTradeResults();
+    setTradeResults(trs);
+    setTrSubmitting(false);
+  }
+
   const pending     = apps.filter(a => a.status === 'Pending').length;
   const underReview = apps.filter(a => a.status === 'Under Review').length;
   const approved    = apps.filter(a => a.status === 'Approved').length;
@@ -209,6 +236,7 @@ export default function AdminPage() {
             { id: 'overview',  icon: '📊', label: 'Overview'    },
             { id: 'kyc',       icon: '🪪', label: 'KYC Queue', badge: pending + underReview },
             { id: 'investors', icon: '👥', label: 'Investors'   },
+            { id: 'trades',    icon: '📈', label: 'Trades'     },
             { id: 'activity',  icon: '⚡', label: 'Activity',  badge: pendingDeposits > 0 ? pendingDeposits : undefined },
           ] as { id: AdminTab; icon: string; label: string; badge?: number }[]).map(item => (
             <button
@@ -242,6 +270,7 @@ export default function AdminPage() {
               {tab === 'overview'  && 'Overview'}
               {tab === 'kyc'       && 'KYC Queue'}
               {tab === 'investors' && 'Investor Records'}
+              {tab === 'trades'    && 'Trade Manager'}
               {tab === 'activity'  && 'Activity Feed'}
             </h1>
             <p className="ap-page-sub">NexoraCapi Admin Panel · {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
@@ -473,6 +502,149 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          </>
+        )}
+
+        {/* ── TRADES ────────────────────────── */}
+        {tab === 'trades' && (
+          <>
+            {/* Post trade result form */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, marginBottom: 24 }}>
+              <div className="ap-section-title" style={{ marginBottom: 16 }}>Post Trade Result</div>
+
+              {/* User select */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Select User</label>
+                <select
+                  className="kyc-input"
+                  value={trEmail}
+                  onChange={e => {
+                    const dep = depositors.find(d => d.email === e.target.value);
+                    setTrEmail(e.target.value);
+                    setTrName(dep?.name ?? '');
+                  }}
+                >
+                  <option value="">— Choose depositor —</option>
+                  {depositors.map(d => (
+                    <option key={d.email} value={d.email}>{d.name || d.email} ({d.email})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Win / Loss */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Result</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setTrType('win')}
+                    style={{
+                      padding: '10px', borderRadius: 10, border: '1.5px solid',
+                      borderColor: trType === 'win' ? '#10d9a0' : 'var(--border)',
+                      background: trType === 'win' ? 'rgba(16,217,160,0.1)' : 'var(--card-alt)',
+                      color: trType === 'win' ? '#10d9a0' : 'var(--text-secondary)',
+                      fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                    }}
+                  >📈 Win / Profit</button>
+                  <button
+                    type="button"
+                    onClick={() => setTrType('loss')}
+                    style={{
+                      padding: '10px', borderRadius: 10, border: '1.5px solid',
+                      borderColor: trType === 'loss' ? '#ff6475' : 'var(--border)',
+                      background: trType === 'loss' ? 'rgba(255,100,117,0.1)' : 'var(--card-alt)',
+                      color: trType === 'loss' ? '#ff6475' : 'var(--text-secondary)',
+                      fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                    }}
+                  >📉 Loss</button>
+                </div>
+              </div>
+
+              {/* Amount + Percent */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                    {trType === 'win' ? 'Profit' : 'Loss'} Amount (USD)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: 14 }}>$</span>
+                    <input
+                      className="kyc-input" style={{ paddingLeft: 24 }}
+                      type="number" min="0" placeholder="0.00"
+                      value={trAmount}
+                      onChange={e => setTrAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                    Percentage (%)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      className="kyc-input" style={{ paddingRight: 28 }}
+                      type="number" min="0" placeholder="0.00"
+                      value={trPercent}
+                      onChange={e => setTrPercent(e.target.value)}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: 14 }}>%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Note */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Note (optional)</label>
+                <input
+                  className="kyc-input"
+                  type="text"
+                  placeholder="e.g. BTC/USDT Long · 2x leverage"
+                  value={trNote}
+                  onChange={e => setTrNote(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="ap-btn approve"
+                style={{ width: '100%' }}
+                onClick={submitTrade}
+                disabled={!trEmail || !trAmount || trSubmitting}
+              >
+                {trSubmitting ? 'Posting…' : `✓ Post ${trType === 'win' ? 'Profit' : 'Loss'} Result`}
+              </button>
+            </div>
+
+            {/* All trade results */}
+            <div className="ap-section-title">All Trade Results ({tradeResults.length})</div>
+            {tradeResults.length === 0 ? (
+              <div className="ap-empty-state"><span>📊</span><p>No trade results posted yet</p></div>
+            ) : (
+              <div className="ap-table">
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr' }}>
+                  <span>User</span><span>Result</span><span>Amount</span><span>Time</span>
+                </div>
+                {tradeResults.map(t => (
+                  <div key={t.id} className="ap-table-row" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{t.userName || t.userEmail}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t.note || '—'}</div>
+                    </div>
+                    <span style={{
+                      fontWeight: 700, fontSize: 12,
+                      color: t.tradeType === 'win' ? '#10d9a0' : '#ff6475',
+                    }}>
+                      {t.tradeType === 'win' ? '📈 Win' : '📉 Loss'}
+                    </span>
+                    <span style={{ fontWeight: 700, color: t.tradeType === 'win' ? '#10d9a0' : '#ff6475' }}>
+                      {t.tradeType === 'win' ? '+' : '-'}${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      {t.pnlPercent > 0 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}> ({t.pnlPercent}%)</span>}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t.timestamp}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 

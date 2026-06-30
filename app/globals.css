@@ -245,6 +245,18 @@ body {
   font-size: 34px;
 }
 
+/* Dashboard stat card */
+.card-stat {
+  background: var(--card-alt);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-stat small  { font-size: 11px; color: var(--text-secondary); }
+.card-stat strong { font-size: 15px; font-weight: 800; }
+
 /* Grid layout for stat cards */
 .grid {
   display: grid;

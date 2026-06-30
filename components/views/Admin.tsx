@@ -9,7 +9,7 @@ interface AdminProps {
   notify: (msg: string) => void;
 }
 
-/* ── KYC Application data (demo) ──────────────── */
+
 interface KycApp {
   id:        string;
   name:      string;
@@ -56,9 +56,6 @@ const RISK_COLOR: Record<KycApp['risk'], string> = {
 type Tab       = 'overview' | 'kyc';
 type KycFilter = 'All' | KycApp['status'];
 
-/* ────────────────────────────────────────────────
-   Main component
-──────────────────────────────────────────────── */
 export default function Admin({ notify }: AdminProps) {
   const [tab,    setTab]    = useState<Tab>('overview');
   const [apps,   setApps]   = useState<KycApp[]>(INIT_APPS);
@@ -238,9 +235,6 @@ export default function Admin({ notify }: AdminProps) {
   );
 }
 
-/* ────────────────────────────────────────────────
-   KYC Detail panel
-──────────────────────────────────────────────── */
 interface DetailProps {
   app:       KycApp;
   onBack:    () => void;
@@ -255,12 +249,10 @@ function KycDetail({ app, onBack, onApprove, onReject, onReview }: DetailProps) 
 
   return (
     <div>
-      {/* Back */}
       <button type="button" className="kyc-detail-back" onClick={onBack}>
         ← Back to Queue
       </button>
 
-      {/* Header */}
       <div className="kyc-detail-header">
         <div className="kyc-detail-avatar">
           {app.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
@@ -277,7 +269,6 @@ function KycDetail({ app, onBack, onApprove, onReject, onReview }: DetailProps) 
         </div>
       </div>
 
-      {/* Fields */}
       <div className="kyc-detail-grid">
         <DetailRow label="Application ID"  value={app.id} />
         <DetailRow label="Nationality"     value={app.nationality} />
@@ -288,21 +279,18 @@ function KycDetail({ app, onBack, onApprove, onReject, onReview }: DetailProps) 
         <DetailRow label="Submitted"       value={app.submitted} />
       </div>
 
-      {/* Document preview placeholder */}
       <div className="kyc-doc-preview">
         <span className="upload-icon">🪪</span>
         <span>ID Document — Uploaded</span>
         <button type="button" className="link-btn" style={{ marginLeft: 'auto' }}>View</button>
       </div>
 
-      {/* PEP warning */}
       {app.pep && (
         <div className="kyc-warning" style={{ marginBottom: 12 }}>
           ⚠️ This applicant declared PEP status. Enhanced due diligence is mandatory before approval per AML/CFT regulations.
         </div>
       )}
 
-      {/* Actions */}
       {isPending && (
         <div className="kyc-action-row">
           {app.status === 'Pending' && (

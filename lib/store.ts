@@ -225,6 +225,98 @@ export async function updateKycStatus(
   if (error) console.error('updateKycStatus:', error.message);
 }
 
+/* ── Trade Results ───────────────────────────── */
+export interface StoreTradeResult {
+  id:         string;
+  userEmail:  string;
+  userName:   string;
+  tradeType:  'win' | 'loss';
+  amount:     number;
+  pnlPercent: number;
+  note:       string;
+  timestamp:  string;
+}
+
+export async function addTradeResult(
+  userEmail: string,
+  userName: string,
+  tradeType: 'win' | 'loss',
+  amount: number,
+  pnlPercent: number,
+  note: string,
+): Promise<StoreTradeResult> {
+  const entry: StoreTradeResult = {
+    id: `TR-${uid().toUpperCase()}`,
+    userEmail, userName, tradeType, amount, pnlPercent, note,
+    timestamp: now(),
+  };
+  await supabase.from('nc_trade_results').insert({
+    id:          entry.id,
+    user_email:  entry.userEmail,
+    user_name:   entry.userName,
+    trade_type:  entry.tradeType,
+    amount:      entry.amount,
+    pnl_percent: entry.pnlPercent,
+    note:        entry.note,
+    timestamp:   entry.timestamp,
+  });
+  return entry;
+}
+
+export async function getTradeResults(): Promise<StoreTradeResult[]> {
+  const { data, error } = await supabase
+    .from('nc_trade_results')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) { console.error('getTradeResults:', error.message); return []; }
+  return (data ?? []).map(r => ({
+    id:         r.id,
+    userEmail:  r.user_email,
+    userName:   r.user_name,
+    tradeType:  r.trade_type,
+    amount:     r.amount,
+    pnlPercent: r.pnl_percent,
+    note:       r.note,
+    timestamp:  r.timestamp,
+  }));
+}
+
+export async function getTradeResultsByEmail(email: string): Promise<StoreTradeResult[]> {
+  const { data, error } = await supabase
+    .from('nc_trade_results')
+    .select('*')
+    .eq('user_email', email)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) { console.error('getTradeResultsByEmail:', error.message); return []; }
+  return (data ?? []).map(r => ({
+    id:         r.id,
+    userEmail:  r.user_email,
+    userName:   r.user_name,
+    tradeType:  r.trade_type,
+    amount:     r.amount,
+    pnlPercent: r.pnl_percent,
+    note:       r.note,
+    timestamp:  r.timestamp,
+  }));
+}
+
+export async function getDepositsByEmail(email: string): Promise<StoreDeposit[]> {
+  const { data, error } = await supabase
+    .from('nc_deposits')
+    .select('*')
+    .eq('user_email', email)
+    .eq('type', 'Deposit')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('getDepositsByEmail:', error.message); return []; }
+  return (data ?? []).map(r => ({
+    id: r.id, userName: r.user_name, userEmail: r.user_email,
+    type: r.type, amount: r.amount, amountNum: r.amount_num,
+    method: r.method, timestamp: r.timestamp, status: r.status,
+  }));
+}
+
 /* ── Poll KYC status by email (user side) ────── */
 export async function getKycStatusByEmail(
   email: string,
