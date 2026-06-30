@@ -339,6 +339,17 @@ export async function getTradeResultsByEmail(email: string): Promise<StoreTradeR
   }));
 }
 
+export async function updateDepositStatus(
+  id: string,
+  status: 'Pending' | 'Processing' | 'Approved' | 'Failed',
+): Promise<void> {
+  const { error } = await supabase
+    .from('nc_deposits')
+    .update({ status })
+    .eq('id', id);
+  if (error) console.error('updateDepositStatus:', error.message);
+}
+
 export async function getDepositsByEmail(email: string): Promise<StoreDeposit[]> {
   const { data, error } = await supabase
     .from('nc_deposits')

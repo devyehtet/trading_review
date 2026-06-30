@@ -8,7 +8,7 @@ import LogoIcon from '../../../components/ui/LogoIcon';
 import { adminRequests, investors } from '../../../lib/appData';
 import type { AdminRequest, Investor } from '../../../lib/types';
 import {
-  getDeposits, getKycEvents, getActivities, updateKycStatus,
+  getDeposits, getKycEvents, getActivities, updateKycStatus, updateDepositStatus,
   getDailyResults, addDailyResult,
   type StoreDeposit, type StoreKyc, type StoreActivity, type StoreDailyResult,
 } from '../../../lib/store';
@@ -639,25 +639,68 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="ap-table" style={{ marginBottom: 24 }}>
-                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr' }}>
-                  <span>ID</span><span>User</span><span>Amount</span><span>Method</span><span>Status</span>
+                <div className="ap-table-head" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 1fr 0.8fr 1fr' }}>
+                  <span>ID</span><span>User</span><span>Amount</span><span>Method</span><span>Status</span><span>Action</span>
                 </div>
-                {deposits.map((d: StoreDeposit) => (
-                  <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.2fr 1fr 1fr 1fr' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{d.id}</span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{d.userName}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.userEmail}</div>
+                {deposits.map((d: StoreDeposit) => {
+                  const statusColor = d.status === 'Approved' ? '#10d9a0' : d.status === 'Failed' ? '#ff6475' : '#ffd97a';
+                  return (
+                    <div key={d.id} className="ap-table-row" style={{ gridTemplateColumns: '1fr 1.2fr 0.8fr 1fr 0.8fr 1fr' }}>
+                      <div>
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{d.id}</span>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{d.plan} Plan · {d.timestamp}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{d.userName || 'User'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.userEmail}</div>
+                      </div>
+                      <span style={{ color: d.type === 'Deposit' ? '#10d9a0' : '#ff6475', fontWeight: 700, fontSize: 13 }}>
+                        {d.type === 'Deposit' ? '+' : '-'}{d.amount}
+                      </span>
+                      <span style={{ fontSize: 12 }}>{d.method}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>
+                        {d.status}
+                      </span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {d.status !== 'Approved' && (
+                          <button
+                            type="button"
+                            style={{
+                              padding: '5px 10px', borderRadius: 8, border: 'none',
+                              background: 'rgba(16,217,160,0.15)', color: '#10d9a0',
+                              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                            }}
+                            onClick={async () => {
+                              await updateDepositStatus(d.id, 'Approved');
+                              notify(`✓ Approved — ${d.id}`);
+                              const deps = await getDeposits();
+                              setDeposits(deps);
+                            }}
+                          >✓ Approve</button>
+                        )}
+                        {d.status !== 'Failed' && d.status !== 'Approved' && (
+                          <button
+                            type="button"
+                            style={{
+                              padding: '5px 10px', borderRadius: 8, border: 'none',
+                              background: 'rgba(255,100,117,0.15)', color: '#ff6475',
+                              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                            }}
+                            onClick={async () => {
+                              await updateDepositStatus(d.id, 'Failed');
+                              notify(`✕ Rejected — ${d.id}`);
+                              const deps = await getDeposits();
+                              setDeposits(deps);
+                            }}
+                          >✕ Reject</button>
+                        )}
+                        {(d.status === 'Approved' || d.status === 'Failed') && (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>—</span>
+                        )}
+                      </div>
                     </div>
-                    <span style={{ color: d.type === 'Deposit' ? '#10d9a0' : '#ff6475', fontWeight: 700 }}>
-                      {d.type === 'Deposit' ? '+' : '-'}{d.amount}
-                    </span>
-                    <span style={{ fontSize: 12 }}>{d.method}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: d.status === 'Approved' ? '#10d9a0' : '#ffd97a' }}>
-                      {d.status}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
